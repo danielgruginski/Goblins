@@ -7,7 +7,7 @@ import bpy, bmesh, math, os
 import numpy as np
 from mathutils import Vector, Matrix, noise
 from mathutils.bvhtree import BVHTree
-from gob_common import ROOT, smoothstep
+from gob_common import ROOT, smoothstep, fill_gutters
 import gob_body
 
 TEX_DIR = os.path.join(ROOT, "textures")
@@ -343,7 +343,133 @@ def game_material(name, image):
     return m
 
 
-def unwrap(ob, head_scale=1.7, margin=0.004):
+def _region_of(bone):
+    """Body part a deform bone belongs to, for the UV layout."""
+    if not bone:
+        return 'torso'
+    side = 'L' if bone.startswith('Left') else 'R' if bone.startswith('Right') else ''
+    b = bone.replace('Left', '').replace('Right', '')
+    if b in ('Head', 'Neck', 'Jaw'):
+        return 'head'
+    if b.startswith('Ear'):
+        return 'ear' + side
+    if b == 'Eye':
+        return 'eye' + side
+    if b in ('UpperArm', 'LowerArm'):
+        return 'arm' + side
+    if b == 'Hand' or any(k in b for k in ('Thumb', 'Index', 'Middle', 'Ring')):
+        return 'hand' + side
+    if b in ('UpperLeg', 'LowerLeg'):
+        return 'leg' + side
+    if b in ('Foot', 'Toes'):
+        return 'foot' + side
+    return 'torso'                   # hips, spine, chest, collarbones
+
+
+def _tube_cut(region, c):
+    """Where a limb or trunk tube is slit open: (face is on the slit side, which side of the slit it is on).
+    Torso and head open down the back, arms underneath, legs on the inside. None for non-tube parts."""
+    if region == 'torso':
+        return c.y > 0.0, c.x > 0
+    if region == 'head':
+        return c.y > gob_body.HC[1], c.x > 0
+    if region in ('armL', 'armR'):
+        return c.z < 0.715, c.y > 0.006
+    if region in ('legL', 'legR'):
+        xa = 0.075 + (0.445 - c.z) * 0.053            # the leg axis leans out toward the ankle
+        return (c.x < xa) if region == 'legL' else (c.x > -xa), c.y > 0.0
+    return None
+
+
+def mark_body_seams(ob, smooth_passes=3, min_piece=8):
+    """Seams along natural lines: between body parts (by skin weights), down the back of trunk and head, under
+    the arms, inside the legs, around the hands and feet (top / underside), and the ears and eyes (front / back).
+    Call in edit mode. Returns the label per face."""
+    me = ob.data
+    rig = ob.find_armature() or bpy.data.objects.get("GoblinRig")
+    names = {g.index: g.name for g in ob.vertex_groups}
+    vbone = []
+    for v in me.vertices:
+        best = max(v.groups, key=lambda g: g.weight, default=None)
+        vbone.append(names.get(best.group) if best else None)
+    vreg = [_region_of(b) for b in vbone]
+    bm = bmesh.from_edit_mesh(me)
+    bm.faces.ensure_lookup_table()
+    bm.normal_update()
+    reg, fbone = {}, {}
+    for f in bm.faces:
+        votes = [vreg[v.index] for v in f.verts]
+        reg[f] = max(set(votes), key=votes.count)
+        bones = [vbone[v.index] for v in f.verts]
+        fbone[f] = max(set(bones), key=lambda b: bones.count(b) if b else -1)
+
+    def above_bone(f):
+        """Face centre on the +Z side of its bone's mid-plane (top of hand / finger, front of ear)."""
+        b = rig.data.bones.get(fbone[f] or "") if rig else None
+        if b is None:
+            return f.normal.z >= 0
+        M = b.matrix_local
+        return (f.calc_center_median() - M.translation).dot(M.col[2].xyz) >= 0
+    for _ in range(smooth_passes):                     # no stray single faces of another part
+        new = {}
+        for f in bm.faces:
+            nb = [reg[g] for e in f.edges for g in e.link_faces if g is not f]
+            top = max(set(nb), key=nb.count) if nb else reg[f]
+            new[f] = top if nb.count(top) >= 2 and top != reg[f] else reg[f]
+        reg = new
+    label = {}
+    for f in bm.faces:
+        r, n = reg[f], f.normal
+        if r.startswith('hand'):                     # palm and each finger: own pieces, split along its bone
+            finger = next((k for k in ('Thumb', 'Index', 'Middle', 'Ring') if k in (fbone[f] or '')), 'Palm')
+            r += '_' + finger + ('_top' if above_bone(f) else '_under')
+        elif r.startswith('foot'):
+            r += '_sole' if n.z < -0.55 else '_top'
+        elif r.startswith('ear'):                    # ear bones' +Z points forward: the cupped front
+            r += '_front' if above_bone(f) else '_back'
+        elif r.startswith('eye'):
+            r += '_front' if n.y < -0.2 else '_back'
+        label[f] = r
+    for _ in range(4):                                 # fold ragged fragments (a few faces) into their neighbours
+        seen, changed = set(), False
+        for f in bm.faces:
+            if f in seen:
+                continue
+            comp, stack = {f}, [f]
+            while stack:
+                h = stack.pop()
+                for e in h.edges:
+                    for g in e.link_faces:
+                        if g not in comp and label[g] == label[f]:
+                            comp.add(g)
+                            stack.append(g)
+            seen |= comp
+            if len(comp) < min_piece:
+                around = [label[g] for h in comp for e in h.edges for g in e.link_faces if g not in comp]
+                if around:
+                    new = max(set(around), key=around.count)
+                    for h in comp:
+                        label[h] = new
+                    changed = True
+        if not changed:
+            break
+    cut = {f: _tube_cut(label[f].split('_')[0], f.calc_center_median()) for f in bm.faces}
+    for e in bm.edges:
+        e.seam = False
+        if len(e.link_faces) != 2:
+            continue
+        a, b = e.link_faces
+        if label[a] != label[b]:
+            e.seam = True
+        elif cut[a] is not None and cut[b] is not None and cut[a][0] and cut[b][0] and cut[a][1] != cut[b][1]:
+            e.seam = True
+    bmesh.update_edit_mesh(me)
+    return {f.index: label[f] for f in bm.faces}
+
+
+def unwrap(ob, head_scale=1.7, eye_scale=2.2, ear_scale=1.3, margin=0.004, relax=60):
+    """Seam-based unwrap of the body: parts are cut open along hidden lines, unfolded (angle based), brought to
+    one texel density, then the face, ears and eyes get more texels before everything is packed."""
     vl = bpy.context.view_layer
     for o in bpy.context.selected_objects:
         o.select_set(False)
@@ -351,28 +477,33 @@ def unwrap(ob, head_scale=1.7, margin=0.004):
     ob.select_set(True)
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=margin, area_weight=0.0,
-                             correct_aspect=True, scale_to_bounds=False)
+    labels = mark_body_seams(ob)
+    bpy.ops.uv.unwrap(method='ANGLE_BASED', fill_holes=True, correct_aspect=True, margin=0.0)
+    bpy.ops.uv.select_all(action='SELECT')
+    bpy.ops.uv.minimize_stretch(iterations=relax)          # unfolds the few slivers the flattening folds over
+    bpy.ops.uv.average_islands_scale()
     bm = bmesh.from_edit_mesh(ob.data)
+    bm.faces.ensure_lookup_table()
     uv = bm.loops.layers.uv.active
-    for f in bm.faces:           # more texels for the face, ears and eyes
-        c = f.calc_center_median()
-        if c.z > 0.80 and abs(c.x) < 0.32:
+    for f in bm.faces:
+        lab = labels[f.index]
+        k = head_scale if lab == 'head' else eye_scale if lab.startswith('eye') else ear_scale if lab.startswith('ear') else 1.0
+        if k != 1.0:
             for l in f.loops:
-                l[uv].uv *= head_scale
+                l[uv].uv *= k
     bmesh.update_edit_mesh(ob.data)
     bpy.ops.uv.select_all(action='SELECT')
     bpy.ops.uv.pack_islands(margin=margin, rotate=True)
     bpy.ops.object.mode_set(mode='OBJECT')
+    return labels
 
 
 def bake(low, sources, image_name, size=1024, material_name="M_Goblin_Skin"):
     os.makedirs(TEX_DIR, exist_ok=True)
     img = bpy.data.images.get(image_name)
-    if img is None or img.size[0] != size:
-        if img is not None:
-            bpy.data.images.remove(img)
-        img = bpy.data.images.new(image_name, size, size, alpha=False)
+    if img is not None:
+        bpy.data.images.remove(img)
+    img = bpy.data.images.new(image_name, size, size, alpha=True)   # alpha marks the islands for fill_gutters
     img.colorspace_settings.name = 'sRGB'
     gm = game_material(material_name, img)
     low.data.materials.clear()
@@ -407,6 +538,8 @@ def bake(low, sources, image_name, size=1024, material_name="M_Goblin_Skin"):
         s.hide_viewport = hv
         s.hide_render = hr
     scn.render.engine = prev
+    _, covered = bake_positions(low, size)       # a selected-to-active bake leaves no coverage in alpha
+    fill_gutters(img, covered)
     path = os.path.join(TEX_DIR, image_name + ".png")
     img.filepath_raw = path
     img.file_format = 'PNG'

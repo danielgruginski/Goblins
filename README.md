@@ -53,6 +53,15 @@ Textures:
 - `T_Goblin_Skin`, `T_Goblin_Skin_Warpaint`, `T_Goblin_Skin_Chief` and `T_Goblin_Skin_Shaman`, 1024².
 - `T_Goblin_Gear`, 2048²; it holds all 29 props and the outfits.
 
+UVs are laid out on purpose, not by Blender's automatic projection:
+- **Body** (`gob_paint.unwrap`): cut along natural seams (down the back of trunk and head, under the arms, inside
+  the legs, around hands, fingers, feet, ears and eyes), unfolded angle-based, one texel density, the face and eyes
+  enlarged.
+- **Gear:** every building block in `gob_common` / `gob_gear` (tubes, rings, straps, slabs, boxes, capes) writes its
+  own UVs as it is built. `bake_gear` only evens out the density and packs.
+- **Gutters:** after each bake, the empty space between pieces is filled with the nearest piece's colour
+  (`fill_gutters`), so mip-maps at colony distance never pull black into the edges.
+
 Two materials per goblin (skin and gear). Segment counts for the gear are scaled in one place (`SEG_SCALE` in
 `gob_gear.py`); the body budget is `build_all(body_tris=...)`.
 
@@ -317,7 +326,8 @@ Not in git: `renders/` (review renders, ~80 MB), Blender's `.blend1` backups, an
 
 - The mouth is painted and sculpted; there is no mouth interior, so `Jaw` is unweighted.
 - Hands have a thumb and three fingers.
-- The gear atlas is fragmented (smart UV project); it bakes cleanly but wastes some space.
+- 12 small faces fold over in the crease between thumb and index finger (the voxel remesh pinches the fingers
+  together there); they cover under 2 cm² and don't show.
 - Still to build: bard, grenadier and warg raider as prop and outfit sets on these sockets (the bard and the
   grenadier's throw will need clips from `gob_anim.py` too), and the warg as its own quadruped rig with a saddle socket.
 - The bow clips have one aim height each (level, 35° up). A game that aims at a target should turn the goblin

@@ -10,7 +10,8 @@ import bpy, bmesh, math, os
 import numpy as np
 from mathutils import Vector, Matrix
 from mathutils.bvhtree import BVHTree
-from gob_common import ROOT, loft, ellipsoid, cone, get_coll, remove_obj, spline, smoothstep
+from gob_common import (ROOT, loft, ellipsoid, cone, get_coll, remove_obj, spline, smoothstep, uv_layer, set_uvs,
+                        grid_faces, fill_gutters)
 import gob_body
 
 TEX_DIR = os.path.join(ROOT, "textures")
@@ -203,37 +204,53 @@ class Builder:
             f.material_index = mi
 
 
+def _slab(bm, outline, frame, z0, z1):
+    """Closed slab from a 2D outline between z0 and z1 in `frame` (a 4x4 taking outline (x, y, z) to object
+    space). UVs: the two flat faces as drawn, the rim as one strip."""
+    uvl = uv_layer(bm)
+    top = [bm.verts.new(frame @ Vector((x, y, z1))) for x, y in outline]
+    bot = [bm.verts.new(frame @ Vector((x, y, z0))) for x, y in outline]
+    set_uvs(bm.faces.new(top), uvl, [(x, y) for x, y in outline])
+    set_uvs(bm.faces.new(bot[::-1]), uvl, [(-x, y) for x, y in outline[::-1]])
+    grid_faces(bm, [top, bot], close_j=True)
+
+
 def prism(bm, pts, z0, z1):
     """Closed slab from a 2D outline (x, y) between z0 and z1 (flat blades, planks)."""
-    top = [bm.verts.new((x, y, z1)) for x, y in pts]
-    bot = [bm.verts.new((x, y, z0)) for x, y in pts]
-    bm.faces.new(top)
-    bm.faces.new(bot[::-1])
-    n = len(pts)
-    for i in range(n):
-        j = (i + 1) % n
-        bm.faces.new((top[i], bot[i], bot[j], top[j]))
+    _slab(bm, pts, Matrix.Identity(4), z0, z1)
 
 
 def box(bm, center, size, rot=None):
-    m = Matrix.Diagonal((size[0], size[1], size[2], 1.0))
-    if rot is not None:
-        m = rot.to_4x4() @ m
-    bmesh.ops.create_cube(bm, size=1.0, matrix=Matrix.Translation(Vector(center)) @ m)
+    """Box with each face unwrapped flat at its true size (six islands)."""
+    uvl = uv_layer(bm)
+    R = rot.to_4x4() if rot is not None else Matrix.Identity(4)
+    M = Matrix.Translation(Vector(center)) @ R
+    V = {}
+    for ix in (0, 1):
+        for iy in (0, 1):
+            for iz in (0, 1):
+                V[ix, iy, iz] = bm.verts.new(M @ Vector(((ix - 0.5) * size[0], (iy - 0.5) * size[1], (iz - 0.5) * size[2])))
+    for k in range(3):
+        a, b = [x for x in range(3) if x != k]
+        for s in (0, 1):
+            quad, uvs = [], []
+            for ca, cb in ((0, 0), (1, 0), (1, 1), (0, 1)):
+                idx = [0, 0, 0]
+                idx[k], idx[a], idx[b] = s, ca, cb
+                quad.append(V[tuple(idx)])
+                uvs.append((ca * size[a], cb * size[b]))
+            set_uvs(bm.faces.new(quad), uvl, uvs)
 
 
 def band(bm, P, N, W, width, thick):
-    """Closed strap: centreline P, outward normals N, across-strap vectors W (all n x 3)."""
+    """Closed strap: centreline P, outward normals N, across-strap vectors W (all n x 3). One strip island."""
     n = len(P)
     secs = []
     for i in range(n):
         p, nn, w = Vector(P[i]), Vector(N[i]).normalized(), Vector(W[i]).normalized()
         c = [p - w * width / 2, p + w * width / 2, p + w * width / 2 + nn * thick, p - w * width / 2 + nn * thick]
         secs.append([bm.verts.new(v) for v in c])
-    for i in range(n):
-        a, b = secs[i], secs[(i + 1) % n]
-        for k in range(4):
-            bm.faces.new((a[k], a[(k + 1) % 4], b[(k + 1) % 4], b[k]))
+    grid_faces(bm, secs, close_j=True, close_i=True)
 
 
 def torus(bm, center, normal, R, r, seg=S(16), rseg=SR(6)):
@@ -247,10 +264,7 @@ def torus(bm, center, normal, R, r, seg=S(16), rseg=SR(6)):
         c = Vector(center) + d * R
         rings.append([bm.verts.new(c + d * r * math.cos(2 * math.pi * j / rseg) + nrm * r * math.sin(2 * math.pi * j / rseg))
                       for j in range(rseg)])
-    for i in range(seg):
-        A, B = rings[i], rings[(i + 1) % seg]
-        for j in range(rseg):
-            bm.faces.new((A[j], A[(j + 1) % rseg], B[(j + 1) % rseg], B[j]))
+    grid_faces(bm, rings, close_j=True, close_i=True)
 
 
 def closed_spline(pts, per_seg=PS(8)):
@@ -391,10 +405,8 @@ def build_loincloth(surf, mats, coll, seed=4):
         grid.append(ring)
     if 'cloth' not in b.mats:
         b.mats.append('cloth')
-    for i in range(R):
-        for j in range(J):
-            f = b.bm.faces.new((grid[i][j], grid[i][(j + 1) % J], grid[i + 1][(j + 1) % J], grid[i + 1][j]))
-            f.material_index = 0
+    for f in grid_faces(b.bm, grid, close_j=True)[0]:
+        f.material_index = 0
     skirt = _finish("Outfit_Loincloth_Skirt", b, coll, mats, solidify=0.004)
 
     # belt under the gut + iron buckle
@@ -528,19 +540,7 @@ def prop_shield():
         for x in np.linspace(x1, x0, 3):
             y = math.sqrt(max(R * R - x * x, 0)) * 0.985
             pts.append((x, y - cut * smoothstep(x0, x1, x)))
-        top = [b.bm.verts.new((x, y, zoff + T / 2)) for x, y in pts]
-        bot = [b.bm.verts.new((x, y, zoff - T / 2)) for x, y in pts]
-        n0 = len(b.bm.faces)
-        b.bm.faces.new(top)
-        b.bm.faces.new(bot[::-1])
-        for i in range(len(pts)):
-            j = (i + 1) % len(pts)
-            b.bm.faces.new((top[i], bot[i], bot[j], top[j]))
-        b.bm.faces.ensure_lookup_table()
-        if 'wood_plank' not in b.mats:
-            b.mats.append('wood_plank')
-        for f in b.bm.faces[n0:]:
-            f.material_index = b.mats.index('wood_plank')
+        b.part('wood_plank', prism, pts, zoff - T / 2, zoff + T / 2)
     b.part('iron', torus, (0, 0, 0.022), (0, 0, 1), R - 0.002, 0.009, seg=S(36), rseg=SR(6))
     b.part('iron', ellipsoid, Vector((0, 0, 0.033)), (0.052, 0.052, 0.034), None, 12, 6)
     b.part('iron', torus, (0, 0, 0.034), (0, 0, 1), 0.052, 0.006, seg=S(24), rseg=SR(5))
@@ -581,19 +581,19 @@ def head_shell(b, mat, zrim, off_in, off_out, U=16, K=4):
         rows_o.append(ro)
         rows_i.append(ri)
     bm = b.bm
+    uvl = uv_layer(bm)
     n0 = len(bm.faces)
     VO = [[bm.verts.new(Vector(p)) for p in r] for r in rows_o[1:]]
     VI = [[bm.verts.new(Vector(p)) for p in r] for r in rows_i[1:]]
     po = bm.verts.new(Vector(rows_o[0][0]))
     pi = bm.verts.new(Vector(rows_i[0][0]))
-    for u in range(U):
-        w = (u + 1) % U
-        bm.faces.new((po, VO[0][u], VO[0][w]))
-        bm.faces.new((pi, VI[0][w], VI[0][u]))
-        for k in range(len(VO) - 1):
-            bm.faces.new((VO[k][u], VO[k + 1][u], VO[k + 1][w], VO[k][w]))
-            bm.faces.new((VI[k][w], VI[k + 1][w], VI[k + 1][u], VI[k][u]))
-        bm.faces.new((VO[-1][u], VI[-1][u], VI[-1][w], VO[-1][w]))
+    for V, pole in ((VO, po), (VI, pi)):              # outside and inside: crown fan + rows down to the rim
+        _, Uc, vv = grid_faces(bm, V, close_j=True)
+        top = vv[0] - (V[0][0].co - pole.co).length
+        for u in range(U):
+            f = bm.faces.new((pole, V[0][u], V[0][(u + 1) % U]))
+            set_uvs(f, uvl, ((0.0, top), (Uc[0][u], vv[0]), (Uc[0][u + 1], vv[0])))
+    grid_faces(bm, [VO[-1], VI[-1]], close_j=True)    # the rim
     bm.faces.ensure_lookup_table()
     if mat not in b.mats:
         b.mats.append(mat)
@@ -645,16 +645,12 @@ def prop_pauldron(spikes=True):
         n0 = len(bm.faces)
         VO = [[bm.verts.new(p[0]) for p in row] for row in grid]
         VI = [[bm.verts.new(p[1]) for p in row] for row in grid]
-        for i in range(X):
-            for a in range(A):
-                bm.faces.new((VO[i][a], VO[i][a + 1], VO[i + 1][a + 1], VO[i + 1][a]))
-                bm.faces.new((VI[i][a], VI[i + 1][a], VI[i + 1][a + 1], VI[i][a + 1]))
-        for i in range(X):
-            for a in (0, A):
-                bm.faces.new((VO[i][a], VO[i + 1][a], VI[i + 1][a], VI[i][a]))
-        for a in range(A):
-            for i in (0, X):
-                bm.faces.new((VO[i][a], VI[i][a], VI[i][a + 1], VO[i][a + 1]))
+        grid_faces(bm, VO)                            # outer and inner plate
+        grid_faces(bm, VI)
+        for a in (0, A):                              # the four edges, each a thin strip
+            grid_faces(bm, [[VO[i][a] for i in range(X + 1)], [VI[i][a] for i in range(X + 1)]])
+        for i in (0, X):
+            grid_faces(bm, [VO[i], VI[i]])
         bm.faces.ensure_lookup_table()
         if mat not in b.mats:
             b.mats.append(mat)
@@ -830,9 +826,7 @@ def prop_pot_helm():
     b = Builder()
     tilt = Matrix.Rotation(math.radians(-7), 3, 'X') @ Matrix.Rotation(math.radians(3), 3, 'Y')
     c = Vector((0, -0.026, 0.957))
-    M = Matrix.Translation(c + tilt @ Vector((0, 0, 0.0475))) @ tilt.to_4x4()
-    b.part('pot', lambda bm: bmesh.ops.create_cone(bm, cap_ends=True, segments=S(22), radius1=0.114, radius2=0.105,
-                                                    depth=0.095, matrix=M))
+    b.part('pot', cone, c, c + tilt @ Vector((0, 0, 0.095)), 0.114, 0.105, seg=S(22))
     b.part('pot', torus, c, tilt @ Vector((0, 0, 1)), 0.115, 0.006, seg=S(22), rseg=SR(5))
     b.part('pot', torus, c + tilt @ Vector((0.128, 0, 0.055)), tilt @ Vector((0, 1, 0)), 0.02, 0.005, seg=S(12), rseg=SR(5))
     for dz in (0.035, 0.075):
@@ -996,10 +990,8 @@ def build_fur_mantle(surf, mats, coll, J=36, R=5):
             col.append(b.bm.verts.new(Vector(loc) + nrm * (0.013 + 0.004 * math.sin(math.pi * t))))
         grid.append(col)
     b.mats.append('fur')
-    for j in range(J):
-        a, c = grid[j], grid[(j + 1) % J]
-        for i in range(R):
-            b.bm.faces.new((a[i], c[i], c[i + 1], a[i + 1])).material_index = 0
+    for f in grid_faces(b.bm, [[grid[j][i] for j in range(J)] for i in range(R + 1)], close_j=True)[0]:
+        f.material_index = 0
     ob = _finish("Outfit_FurMantle", b, coll, mats, solidify=0.012)
     clasp = Builder()                              # brass clasp at the throat, part of the mantle
     loc, nrm, _ = surf.nearest((0, -0.06, 0.745))
@@ -1116,8 +1108,7 @@ def prop_skull_pauldron():
 def prop_chief_buckle():
     """Big iron belt plate with a brass rim and a horned skull (belt socket space: +Y up, +Z forward)."""
     b = Builder()
-    b.part('iron', lambda bm: bmesh.ops.create_cone(bm, cap_ends=True, segments=S(16), radius1=0.048, radius2=0.046,
-                                                     depth=0.01, matrix=Matrix.Translation((0, 0, 0.006))))
+    b.part('iron', cone, (0, 0, 0.001), (0, 0, 0.011), 0.048, 0.046, seg=S(16))
     b.part('brass', torus, (0, 0, 0.011), (0, 0, 1), 0.047, 0.005, seg=S(16), rseg=SR(4))
     _skull(b, (0, 0.004, 0.028), s=0.8, facing=(0, -0.35, 1))
     return b, 'socket'
@@ -1263,13 +1254,7 @@ def _feather(bm, base, rot, ln, w=0.012):
     """Flat feather: quill end at base, vane widening then tapering to a point along rot's +Y, face along +Z."""
     prof = [(0.0, 0.0), (0.3, 0.07), (0.85, 0.28), (1.0, 0.55), (0.7, 0.83), (0.0, 1.0)]
     outline = [(w * a, ln * t) for a, t in prof] + [(-w * a, ln * t) for a, t in reversed(prof[1:-1])]
-    top = [bm.verts.new(base + rot @ Vector((x, y, 0.0012))) for x, y in outline]
-    bot = [bm.verts.new(base + rot @ Vector((x, y, -0.0012))) for x, y in outline]
-    bm.faces.new(top)
-    bm.faces.new(bot[::-1])
-    for i in range(len(outline)):
-        j = (i + 1) % len(outline)
-        bm.faces.new((top[i], bot[i], bot[j], top[j]))
+    _slab(bm, outline, Matrix.Translation(base) @ rot.to_4x4(), -0.0012, 0.0012)
 
 
 def prop_shaman_headdress():
@@ -1342,13 +1327,9 @@ def build_shaman_cloak(surf, mats, coll, J=36, R=6):
             loc, nrm, _ = surf.nearest(p)
             col.append(b.bm.verts.new(Vector(loc) + nrm * (0.011 + 0.006 * math.sin(math.pi * t) + 0.004 * t)))
         grid[j] = col
-    for j in range(J):
-        k = (j + 1) % J
-        if j not in grid or k not in grid:
-            continue
-        a, c = grid[j], grid[k]
-        for i in range(R):
-            b.bm.faces.new((a[i], c[i], c[i + 1], a[i + 1])).material_index = 0
+    js = sorted(grid)                                # one run of columns from one front edge round the back
+    for f in grid_faces(b.bm, [[grid[j][i] for j in js] for i in range(R + 1)])[0]:
+        f.material_index = 0
     ob = _finish("Outfit_ShamanCloak", b, coll, mats, solidify=0.008)
     tie = Builder()                                  # cord across the collarbones with a bone toggle
     ctrl = [(0.095, -0.07, 0.72), (0.05, -0.085, 0.705), (0.0, -0.09, 0.70), (-0.05, -0.085, 0.705), (-0.095, -0.07, 0.72)]
@@ -1452,13 +1433,33 @@ def build_gear():
 
 
 # ----------------------------------------------------------------------------------------- atlas bake
-def bake_gear(objs, size=1024, name="T_Goblin_Gear", samples=24):
+def uv_report(objs):
+    """Islands per object and faces left without UVs (all loops at 0,0), which should be none."""
+    out = {}
+    for o in objs:
+        me = o.data
+        uv = me.uv_layers.active
+        if uv is None:
+            out[o.name] = "NO UV LAYER"
+            continue
+        co = np.empty(len(me.loops) * 2, dtype=np.float32)
+        uv.data.foreach_get("uv", co)
+        co = co.reshape(-1, 2)
+        bad = sum(1 for p in me.polygons if not np.any(co[p.loop_start:p.loop_start + p.loop_total]))
+        out[o.name] = bad
+    return {k: v for k, v in out.items() if v}
+
+
+def bake_gear(objs, size=1024, name="T_Goblin_Gear", samples=24, margin=0.0035):
+    """Pack the construction UVs of all gear into one atlas (even texel density) and bake the painted materials."""
     os.makedirs(TEX_DIR, exist_ok=True)
     img = bpy.data.images.get(name)
-    if img is None or img.size[0] != size:
-        if img is not None:
-            bpy.data.images.remove(img)
-        img = bpy.data.images.new(name, size, size, alpha=False)
+    if img is not None:
+        bpy.data.images.remove(img)
+    img = bpy.data.images.new(name, size, size, alpha=True)     # alpha marks the islands for fill_gutters
+    missing = uv_report(objs)
+    if missing:
+        print("gear faces without UVs:", missing)
     vl = bpy.context.view_layer
     for o in bpy.context.selected_objects:
         o.select_set(False)
@@ -1467,10 +1468,9 @@ def bake_gear(objs, size=1024, name="T_Goblin_Gear", samples=24):
     vl.objects.active = objs[0]
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.003, area_weight=0.0,
-                             correct_aspect=True, scale_to_bounds=False)
     bpy.ops.uv.select_all(action='SELECT')
-    bpy.ops.uv.pack_islands(margin=0.003, rotate=True)
+    bpy.ops.uv.average_islands_scale()
+    bpy.ops.uv.pack_islands(margin=margin, rotate=True)
     bpy.ops.object.mode_set(mode='OBJECT')
     mats = {m for o in objs for m in o.data.materials if m is not None}
     for m in mats:
@@ -1487,9 +1487,10 @@ def bake_gear(objs, size=1024, name="T_Goblin_Gear", samples=24):
     rig = bpy.data.objects[RIG]
     prev_pose = rig.data.pose_position
     rig.data.pose_position = 'REST'
-    bpy.ops.object.bake(type='EMIT', margin=8, use_clear=True)
+    bpy.ops.object.bake(type='EMIT', margin=4, use_clear=True)
     rig.data.pose_position = prev_pose
     scn.render.engine = prev
+    fill_gutters(img)
     img.filepath_raw = os.path.join(TEX_DIR, name + ".png")
     img.file_format = 'PNG'
     img.save()

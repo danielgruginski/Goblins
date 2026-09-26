@@ -36,6 +36,12 @@ have bitten, the open issues and the checks to run.
     hips dropped at least 0.025;
   - export with `gob_anim.export_clips` (skeleton only). In Unity the clip FBX needs `preserveHierarchy` and
     Goblin.fbx's avatar; `GoblinSetup.ConfigureClips` does both.
+- **UVs are never automatic:**
+  - a new gear builder must lay out its UVs (use `grid_faces`, `_slab`, `box`, or the `calc_uvs` primitives);
+    `gob_gear.uv_report` lists faces left without UVs and `bake_gear` prints them;
+  - the body's seams come from skin weights in `gob_paint.mark_body_seams`;
+  - after rebuilding textures, look at the PNGs themselves and at a UV layout (`bpy.ops.uv.export_layout`), not
+    only at renders. The first unwrap was a smart-UV mess that renders hid (Daniel caught it).
 - **Effects** are objects named `FX_*`. `GoblinAppearance` leaves them out of the merged mesh.
 - **Unity:**
   - if bones are renamed, delete `Goblin.fbx.meta` before reimporting;
@@ -62,7 +68,7 @@ Done:
   goblin's forward, not at a target.
 - **Archer:** two fixed aim heights (level and 35°). The arrow vanishes when an archer switches to walking.
 - **Shoulder blades:** faint in shade. The plate offset is in `gob_body.build_torso`.
-- **Atlas:** the gear atlas is fragmented (smart UV project). There are no LODs.
+- **Hands:** 12 tiny faces fold over in the thumb and index crease. There are no LODs.
 
 ## Checks
 
