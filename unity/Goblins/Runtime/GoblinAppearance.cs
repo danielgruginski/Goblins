@@ -93,13 +93,19 @@ namespace Goblins
             if (combined != null)
             {
                 combined.gameObject.SetActive(false);
-                Destroy(combined.gameObject);
+                Gone(combined.gameObject);
                 combined = null;
             }
             foreach (var r in sources) if (r != null) r.enabled = true;
             sources.Clear();
             Randomize(0);
             if (wasMerged) SetMerged(true);
+        }
+
+        /// <summary>Destroy in play mode, DestroyImmediate in the editor (bakes and previews roll looks there)</summary>
+        static void Gone(GameObject g)
+        {
+            if (Application.isPlaying) Destroy(g); else DestroyImmediate(g);
         }
 
         Transform[] all;
@@ -130,7 +136,7 @@ namespace Goblins
                     if (c.name.StartsWith("Prop_"))
                     {
                         c.gameObject.SetActive(false);
-                        Destroy(c.gameObject);
+                        Gone(c.gameObject);
                     }
             }
             foreach (var slot in slots)

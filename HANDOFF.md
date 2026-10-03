@@ -60,6 +60,12 @@ Done:
 - shaman: staff, headdress, cape and paint, 3 clips, glow, hex bolt and chant ring;
 - animation test scene with 28 goblins.
 
+- dead goblins (2026-10-02): `Editor/GoblinCorpses.cs`, Tools > Goblins > Bake Dead Goblins: four rolled goblins
+  (spearman, archer, swordsman, unarmed) posed at the last frame of Human Animations death clips and baked into
+  static props, `Prefabs/Corpses/Goblin_Dead_1..4` (6-8k tris, a low box collider). MedievalSetting's caves place
+  them as loot. The animator must be set to always animate for the bake (no camera sees the preview scene).
+  `GoblinAppearance` now destroys with DestroyImmediate outside play mode (rolling a look in the editor).
+
 ## Open / next
 
 - **Still to build:** bard, grenadier (medieval firepots or bombs, with a throw clip from `gob_anim`), warg
