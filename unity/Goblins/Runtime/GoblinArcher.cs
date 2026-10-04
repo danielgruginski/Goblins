@@ -13,7 +13,8 @@ namespace Goblins
     /// and back on the string at <see cref="Timing.nock"/> (seconds; the frames of gob_anim.EVENTS at 30 fps).
     /// Other clips (walking, idles, hurt) carry the bow with no arrow out.
     ///
-    /// Reads the clip from GoblinRandomAnimator, or from an Animator Controller's layer 0 in a game.
+    /// Reads the clip from the goblin's <see cref="IGoblinAnimSource"/> (GoblinRandomAnimator, or a game's driver), or
+    /// from an Animator Controller's layer 0.
     /// <see cref="Loosed"/> fires at every loose (spawn damage, sound or your own projectile there);
     /// <see cref="projectile"/>, when set, also flies a GoblinArrow.
     /// </summary>
@@ -54,7 +55,7 @@ namespace Goblins
 
         Transform left, right, arrow;
         LineRenderer line;
-        GoblinRandomAnimator driver;
+        IGoblinAnimSource driver;
         Animator anim;
         float nockW, lastT = -1;
         string lastClip = "";
@@ -67,7 +68,7 @@ namespace Goblins
                 if (t.name == "Socket_LeftHand") left = t;
                 else if (t.name == "Socket_RightHand") right = t;
             }
-            driver = GetComponent<GoblinRandomAnimator>();
+            TryGetComponent(out driver);
             anim = GetComponent<Animator>();
             var go = new GameObject("BowString");
             go.transform.SetParent(transform, false);
@@ -106,6 +107,7 @@ namespace Goblins
         {
             clip = "";
             t = 0;
+            if (driver == null) TryGetComponent(out driver);
             if (driver != null)
             {
                 clip = driver.CurrentClip;

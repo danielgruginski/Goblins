@@ -46,6 +46,8 @@ have bitten, the open issues and the checks to run.
 - **Unity:**
   - if bones are renamed, delete `Goblin.fbx.meta` before reimporting;
   - the Jaw must be pinned to `Jaw` (`GoblinModelPostprocessor`);
+  - Goblin*.fbx and Models/Props/*.fbx import Read/Write (`GoblinModelPostprocessor`): `GoblinAppearance` merges
+    the parts at run time and must read their meshes, else a goblin in a game build merges to nothing;
   - after swapping renderers, call `Animator.Rebind()`;
   - play mode does not tick while the editor is unfocused: set `Application.runInBackground = true` for the
     session;

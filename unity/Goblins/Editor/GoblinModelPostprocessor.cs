@@ -7,7 +7,9 @@ using UnityEngine;
 namespace Goblins.EditorTools
 {
     /// <summary>
-    /// Imports Goblin*.fbx as Humanoid and pins the optional Jaw to the "Jaw" bone.
+    /// Imports Goblin*.fbx as Humanoid and pins the optional Jaw to the "Jaw" bone. The goblin and its props import with
+    /// Read/Write on: GoblinAppearance merges a goblin's parts into one mesh at run time, and reads theirs to do it
+    /// (without it a goblin in a game is merged empty: invisible).
     ///
     /// Unity's auto-mapper otherwise hands the Jaw slot to another child of Head (the helmet
     /// socket) or leaves it empty; a clip that animates the jaw would then wobble the helmet or do nothing. The first import
@@ -31,10 +33,16 @@ namespace Goblins.EditorTools
             return jaw.humanName == null || jaw.boneName != "Jaw";      // missing or pointing at another bone
         }
 
+        static bool IsProp(string path) =>
+            path.Replace('\\', '/').IndexOf("Goblins/Models/Props/", StringComparison.OrdinalIgnoreCase) >= 0 &&
+            path.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase);
+
         void OnPreprocessModel()
         {
+            if (IsProp(assetPath)) ((ModelImporter)assetImporter).isReadable = true;     // merged at run time
             if (!IsGoblin(assetPath)) return;
             var imp = (ModelImporter)assetImporter;
+            imp.isReadable = true;                                                      // merged at run time
             if (imp.animationType != ModelImporterAnimationType.Human)
             {
                 imp.animationType = ModelImporterAnimationType.Human;

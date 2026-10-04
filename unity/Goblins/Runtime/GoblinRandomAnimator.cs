@@ -12,7 +12,7 @@ namespace Goblins
     /// For looking at retargeted animation; a game would drive clips from its own state machine.
     /// </summary>
     [RequireComponent(typeof(Animator))]
-    public class GoblinRandomAnimator : MonoBehaviour
+    public class GoblinRandomAnimator : MonoBehaviour, IGoblinAnimSource
     {
         public GoblinAnimationSet set;
         public float crossfade = 0.25f;

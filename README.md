@@ -240,11 +240,13 @@ Goblin.fbx's avatar.
   fingers.
 - **Arrow:** laid from the fingers through the arrow rest, so it stays true after retargeting. Hidden after the
   loose, back in the hand when it comes out of the quiver.
-- **Timing:** read from the playing clip (`timings`, in seconds). It works with `GoblinRandomAnimator` or an
-  Animator Controller.
+- **Timing:** read from the playing clip (`timings`, in seconds). It works with `GoblinRandomAnimator`, an
+  Animator Controller, or a game's own animation driver that implements `IGoblinAnimSource` (the clip playing, its
+  time, the two-hand and hunch weights); `GoblinShaman`, `GoblinPosture` and `GoblinTwoHandGrip` read it the same way.
 - **Other clips:** walks, idles and hurts carry the bow with no arrow out.
 - **Loose:** the `Loosed` event fires with the nock position and velocity; hook damage and sound there. If
-  `projectile` is set it also flies a `GoblinArrow`, which is ballistic, sticks in the ground and is pooled.
+  `projectile` is set it also flies a `GoblinArrow`, which is ballistic, sticks in the ground and is pooled
+  (`GoblinArrow.Fire(.., clear)` ignores what it meets within `clear` m across of the nock: the archer's own parapet).
 - **Driving it yourself:** call `Apply(clip, seconds, dt)` after sampling a pose.
 
 The bow clips already carry the hunch, so their pools are marked `upright` and `GoblinPosture` fades out for

@@ -4,8 +4,9 @@ namespace Goblins
 {
     /// <summary>
     /// Two-handed polearm grip: the prop in Socket_RightHand is swung about the right fist so its shaft passes
-    /// through the left fist (Socket_LeftHand), as polearm clips expect. <see cref="weight"/> blends it in; the
-    /// GoblinRandomAnimator drives it from pools marked two-handed, a game state machine can set it directly.
+    /// through the left fist (Socket_LeftHand), as polearm clips expect. <see cref="weight"/> blends it in; the clip
+    /// source (<see cref="IGoblinAnimSource"/>: GoblinRandomAnimator, or a game's driver) drives it from pools marked
+    /// two-handed; without one, set it directly.
     /// </summary>
     [DefaultExecutionOrder(200)]       // after the animation and GoblinPosture
     public class GoblinTwoHandGrip : MonoBehaviour
@@ -13,7 +14,7 @@ namespace Goblins
         [Range(0, 1)] public float weight;
 
         Transform right, left, prop;
-        GoblinRandomAnimator driver;
+        IGoblinAnimSource driver;
 
         void Awake()
         {
@@ -22,7 +23,7 @@ namespace Goblins
                 if (t.name == "Socket_RightHand") right = t;
                 else if (t.name == "Socket_LeftHand") left = t;
             }
-            driver = GetComponent<GoblinRandomAnimator>();
+            TryGetComponent(out driver);
         }
 
         void LateUpdate()
@@ -32,6 +33,7 @@ namespace Goblins
                 prop = right.childCount > 0 ? right.GetChild(right.childCount - 1) : null;
             if (prop == null) return;
             prop.localRotation = Quaternion.identity;
+            if (driver == null) TryGetComponent(out driver);
             if (driver != null) weight = driver.TwoHandWeight;
             var axis = right.up;                                   // the prop's shaft (+Y, toward the tip)
             var toLeft = left.position - right.position;

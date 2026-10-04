@@ -11,8 +11,8 @@ namespace Goblins
     ///                          (heal or bolster the goblins inside <see cref="ringRadius"/>).
     /// Timing is in seconds into each clip (the frames of gob_anim.EVENTS at 30 fps). <see cref="Cast"/> fires at
     /// every cast with the spell name, origin and direction; hook damage, healing and sound there.
-    /// Reads the clip from GoblinRandomAnimator, or from an Animator Controller's layer 0 in a game; or call
-    /// <see cref="Apply"/> yourself.
+    /// Reads the clip from the goblin's <see cref="IGoblinAnimSource"/> (GoblinRandomAnimator, or a game's driver), or
+    /// from an Animator Controller's layer 0; or call <see cref="Apply"/> yourself.
     /// </summary>
     [DefaultExecutionOrder(200)]        // after the animation and GoblinPosture
     public class GoblinShaman : MonoBehaviour
@@ -62,7 +62,7 @@ namespace Goblins
         MeshRenderer core, halo;
         Light glowLight;
         MaterialPropertyBlock mpb;
-        GoblinRandomAnimator driver;
+        IGoblinAnimSource driver;
         Animator anim;
         string lastClip = "";
         float lastT = -1f, flare, seed;
@@ -71,7 +71,7 @@ namespace Goblins
         {
             foreach (var t in GetComponentsInChildren<Transform>(true))
                 if (t.name == "Socket_RightHand") right = t;
-            driver = GetComponent<GoblinRandomAnimator>();
+            TryGetComponent(out driver);
             anim = GetComponent<Animator>();
             mpb = new MaterialPropertyBlock();
             seed = UnityEngine.Random.value * 10f;
@@ -98,7 +98,8 @@ namespace Goblins
         {
             clip = "";
             t = 0;
-            if (driver != null && driver.enabled)
+            if (driver == null) TryGetComponent(out driver);
+            if (driver != null && (!(driver is Behaviour b) || b.enabled))
             {
                 clip = driver.CurrentClip;
                 t = driver.CurrentTime;

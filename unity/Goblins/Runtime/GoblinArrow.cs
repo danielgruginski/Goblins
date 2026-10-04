@@ -5,7 +5,8 @@ namespace Goblins
 {
     /// <summary>
     /// A loosed arrow: flies ballistically, turns along its velocity, sticks into the first collider its tip meets
-    /// (the ground), and goes back to a pool after a while. The model is Prop_Arrow: nock at the origin, shaft
+    /// (the ground; not within <c>clear</c> across of where it was loosed: the archer's own cover, a parapet it shoots over),
+    /// and goes back to a pool after a while. The model is Prop_Arrow: nock at the origin, shaft
     /// along local -X (Blender +X, mirrored by the FBX import), tip 0.5 m out.
     /// </summary>
     public class GoblinArrow : MonoBehaviour
@@ -16,12 +17,13 @@ namespace Goblins
         const float Length = 0.5f, Bury = 0.09f;
 
         Vector3 velocity;
-        float timer, scale = 1f;
+        float timer, scale = 1f, clear;
+        Vector3 loosed;
         bool stuck;
         GoblinArrow source;
         static readonly Dictionary<GoblinArrow, Stack<GoblinArrow>> pools = new Dictionary<GoblinArrow, Stack<GoblinArrow>>();
 
-        public static GoblinArrow Fire(GoblinArrow prefab, Vector3 nock, Vector3 velocity, float scale = 1f)
+        public static GoblinArrow Fire(GoblinArrow prefab, Vector3 nock, Vector3 velocity, float scale = 1f, float clear = 0f)
         {
             if (!pools.TryGetValue(prefab, out var pool)) pools[prefab] = pool = new Stack<GoblinArrow>();
             GoblinArrow a = null;
@@ -30,6 +32,8 @@ namespace Goblins
             a.source = prefab;
             a.velocity = velocity;
             a.scale = scale;
+            a.clear = clear;
+            a.loosed = nock;
             a.timer = 0;
             a.stuck = false;
             a.transform.localScale = Vector3.one * scale;
@@ -66,7 +70,8 @@ namespace Goblins
             var dir = velocity.normalized;
             var step = velocity * dt;
             var tip = transform.position + dir * (Length * scale);
-            if (Physics.Raycast(tip, dir, out var hit, step.magnitude, ~0, QueryTriggerInteraction.Ignore))
+            if (Physics.Raycast(tip, dir, out var hit, step.magnitude, ~0, QueryTriggerInteraction.Ignore) &&
+                new Vector2(hit.point.x - loosed.x, hit.point.z - loosed.z).sqrMagnitude >= clear * clear)
             {
                 transform.position = hit.point - dir * ((Length - Bury) * scale);
                 stuck = true;
