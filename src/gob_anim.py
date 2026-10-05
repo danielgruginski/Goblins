@@ -655,7 +655,7 @@ def export_clips(names=("Bow_Ready", "Bow_Shoot", "Bow_Volley", "Shaman_Idle", "
     keep = (scn.frame_start, scn.frame_end, scn.render.fps)
     try:
         for name in names:
-            use(name)
+            use(name, scene=scn.name)                  # this scene's frame range is the take's
             scn.render.fps = FPS
             for o in bpy.context.selected_objects:
                 o.select_set(False)

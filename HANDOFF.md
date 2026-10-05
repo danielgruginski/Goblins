@@ -68,6 +68,12 @@ Done:
   them as loot. The animator must be set to always animate for the bake (no camera sees the preview scene).
   `GoblinAppearance` now destroys with DestroyImmediate outside play mode (rolling a look in the editor).
 
+- crossbow clips (2026-10-04, for the RPG's humans): `src/gob_crossbow.py`, scene **Goblin_Crossbow** (the plain
+  goblin with a goblin-sized copy of the weapon kit's light crossbow), `Goblin@Crossbow_Ready` / `_Shoot`; checked on
+  the human in Unity (aim at the cheek, spanning nose down, a bolt laid) and shooting in play mode. `export_clips` now
+  takes the frame range from the scene it runs in (it used the archer scene's, and the ready loop came out 94 frames).
+  The rig is left on `Crossbow_Shoot` for viewing: `gob_anim.clear()` before exporting the character.
+
 ## Open / next
 
 - **Still to build:** bard, grenadier (medieval firepots or bombs, with a throw clip from `gob_anim`), warg

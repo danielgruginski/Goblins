@@ -90,7 +90,7 @@ namespace Goblins.EditorTools
         };
 
         /// <summary>Clips with the looping flag; every clip bakes its root into the pose (in place, body turn kept).</summary>
-        static readonly HashSet<string> LoopingClips = new HashSet<string> { "Bow_Ready", "Shaman_Idle" };
+        static readonly HashSet<string> LoopingClips = new HashSet<string> { "Bow_Ready", "Shaman_Idle", "Crossbow_Ready" };
 
         // ---- variation rolled per goblin by GoblinAppearance ------------------------------------------------
         static GoblinAppearance.Optional[] Outfits(float harness, float wraps) => new[]

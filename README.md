@@ -34,6 +34,7 @@ gob_anim.clear()           # back to the T-pose before exporting the character a
 | `gob_gear.py` | Skinned outfits, socket props, painted source materials, one gear atlas |
 | `gob_export.py` | FBX for Unity |
 | `gob_anim.py` | Custom clips keyframed through the rig's IK and baked on export (the archer's and the shaman's) |
+| `gob_crossbow.py` | Crossbow clips for the game's humans (scene **Goblin_Crossbow**), posed from the weapon kit's crossbow |
 
 ## Budget (colony camera, ~40 m at 50°, no LODs)
 
@@ -288,6 +289,25 @@ Clips made in Blender (`gob_anim.py`, scene **Goblin_Shaman**, with a glowing pr
 The glow uses `M_Goblin_Magic`, an additive URP Particles/Unlit material with a soft dot texture (`T_Goblin_Glow`),
 both made by the setup. The effect objects are named `FX_*`, and `GoblinAppearance` leaves anything named that way
 out of the merged mesh. From the colony camera, the green glow is what picks the shaman out of the crowd.
+
+### Crossbow clips (for the game's humans)
+
+The RPG's humans hold the bow clips above (Humanoid retargets them), and a crossbow needs its own: no bought pack has
+one. `gob_crossbow.py` keys them on this rig in the scene **Goblin_Crossbow** (a linked copy of Goblin, plain goblin
+look) with a goblin-sized copy of the weapon kit's light crossbow (GameArtGeneration/Weapons, `wpn_roster`, scaled
+0.6) on `Socket_LeftHand`:
+
+| Clip | Length | What happens |
+|---|---|---|
+| `Crossbow_Ready` | 2.0 s, loop | low across the body, nose down and forward, both fists on it, breathing |
+| `Crossbow_Shoot` | 3.1 s | raised to the cheek, aimed along the forward, **loosed at 0.80 s** (a small kick), lowered nose down in front of the left thigh, the string drawn back to the nut, a bolt from the right hip laid in the groove, back to ready |
+
+The crossbow is a left-hand prop: the left fist cradles the fore-stock, the right hand is placed from the crossbow's
+own points (trigger grip, string, nut, groove; `GRIP_R`, `STRING_FRONT`, `NUT`, `GROOVE`, `CHEEK`, mirrored from
+`wpn_roster`). Rebuild with `gob_crossbow.build_clips()` and `gob_anim.export_clips(("Crossbow_Ready",
+"Crossbow_Shoot"))` with the crossbow scene on screen (`export_clips` takes the frame range from the scene it runs in).
+In Unity they import like the bow clips (Humanoid, Goblin.fbx's avatar, `preserveHierarchy`; `GoblinSetup` loops
+`Crossbow_Ready`); MedievalSetting's `HumanAnimsMenu` plays them as `attack_crossbow` / `idle_combat_crossbow`.
 
 ### Animation test scene
 
