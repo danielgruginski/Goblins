@@ -564,6 +564,14 @@ def build_clips():
     return out
 
 
+def _slot(ob, act):
+    """Blender 4.4 actions have slots: one made on another object (gob_ride's GoblinRider) doesn't bind to this one by
+    itself, and an export then bakes the rest pose. Give it the action's first slot."""
+    ad = ob.animation_data
+    if hasattr(ad, "action_slot") and ad.action_slot is None and len(getattr(act, "slots", ())):
+        ad.action_slot = act.slots[0]
+
+
 def use(name, frame=None, scene=None):
     """Put a clip on the rig (and a scene's timeline) for viewing."""
     r = _rig()
@@ -571,6 +579,7 @@ def use(name, frame=None, scene=None):
     if r.animation_data is None:
         r.animation_data_create()
     r.animation_data.action = act
+    _slot(r, act)
     scn = bpy.data.scenes.get(scene or ("Goblin_Shaman" if name.startswith("Shaman") else "Goblin_Archer")) or bpy.context.scene
     scn.frame_start, scn.frame_end = int(act.frame_range[0]), int(act.frame_range[1])
     scn.frame_set(int(act.frame_range[0]) if frame is None else frame)

@@ -74,10 +74,27 @@ Done:
   takes the frame range from the scene it runs in (it used the archer scene's, and the ready loop came out 94 frames).
   The rig is left on `Crossbow_Shoot` for viewing: `gob_anim.clear()` before exporting the character.
 
+- warg riders (2026-10-18, Daniel: "goblin warg riders ... complete with animations"; all clips ours): `src/gob_ride.py`,
+  scene **Goblin_Warg** (the warg appended from Beasts' `beasts_unsaved_2026-10-12_warg.blend`; `GoblinRider` = a copy
+  of GoblinRig parented to the warg's `Socket_Saddle`, dressed with copies of the body and gear). 15 clips
+  `Goblin@WargRider_*`: one per warg clip (Idle, IdlePant, Walk, Trot, Run, Bite, Lunge, Threat, Howl, Hit, Death),
+  keyed every frame in saddle space: a damped torso lagging the saddle's accelerations, head level, feet on the
+  stirrup treads and the left fist on the reins read off the deformed tack each frame, per-clip accents (whoop,
+  crouch, levelled spear), and Death throws the goblin off the warg's high side; plus Slash (sword), Thrust (spear),
+  Flinch (upper-body overlays) and Fall (played off the seat). `gob_ride.build_all()`, `gob_ride.render_sheet(...)`,
+  export with the **Goblin** scene on screen: `gob_ride.export_clips()`. In MedievalSetting: `Beasts.MountedRider`
+  + game-side `Assets/Game/Riders` (`RiderSetup.cs`, prefabs WargRider_Spear / WargRider_Sword, `Riders_Test`).
+  Gotcha: Blender 4.4 action slots -- an action keyed on GoblinRider binds to GoblinRig only through its slot
+  (`gob_anim.use` assigns it now; before, the exports baked the T-pose).
+  Same day (Daniel: "the spear swirls wildly in the hand after the thrust"): the thrust is underhand now (the grip
+  the fist has on the upright spear; the overhand stab asked for a half turn round the shaft), the hand's roll is the
+  least rotation from the resting grip (`_knuckles_for`), and own clips key every frame between the key poses
+  (`build_own`: matrices eased, turns slerped, the IK solving each frame).
+
 ## Open / next
 
-- **Still to build:** bard, grenadier (medieval firepots or bombs, with a throw clip from `gob_anim`), warg
-  raider (the warg needs its own quadruped rig and a saddle socket).
+- **Still to build:** bard, grenadier (medieval firepots or bombs, with a throw clip from `gob_anim`); a mounted
+  archer (warg riders have spear and sword only).
 - **Shaman:** the Chant ring has no gameplay effect yet; hook `GoblinShaman.Cast`. The Hex bolt flies along the
   goblin's forward, not at a target.
 - **Archer:** two fixed aim heights (level and 35°). The arrow vanishes when an archer switches to walking.
