@@ -134,10 +134,11 @@ Done:
 ## Open / next
 
 - **Troll:**
-  - not seen by Daniel; not in MedievalSetting (install with `-Troll`, then Tools > Goblins > Rebuild Troll) and not
+  - installed in MedievalSetting (`-Troll`, Tools > Goblins > Rebuild Troll; checked in cs:82), not in the game, not
     played;
   - two-handed clips: Attack2H02's chop drives the club's tip 0.41 m into the ground, Attack2H04 leaps 1 m and spreads
-    the fists 1.27 m; one-handed swings (Attack1H01_R: tip −0.03 m) suit the club; else a ground clamp or left-hand IK;
+    the fists 1.27 m; so `TrollAnims` (2026-10-23, README "The troll's animation set") swings one-handed only
+    (Attack1H01/03/05_R); a two-handed troll needs a ground clamp or left-hand IK;
   - death clips sink the troll up to 0.42 m into the ground (the goblin 0.26 m): dead trolls as props would need the
     `GoblinCorpses` lift;
   - the hair reads as a flat cap from the front; the eyes are small and the lids subtle; the face shows facets up

@@ -53,6 +53,18 @@ namespace Goblins.EditorTools
             ("Swing1H", new[] { "Attack1H01_R" }, 0.3f, false),       // one-handed, for comparison with the two-handed grip
             ("Hit", new[] { "CombatDamage01" }, 0.2f, false),
             ("Death", new[] { "CombatDeath01", "Death01" }, 1f, false),
+            // candidates for the troll's own set (2026-10-23: the two-handed chops put the club 0.4 m into the ground)
+            ("Swing1H_2", new[] { "Attack1H02_R" }, 0.4f, false),
+            ("Swing1H_3", new[] { "Attack1H03_R" }, 0.35f, false),
+            ("Swing1H_4", new[] { "Attack1H04_R" }, 0.4f, false),
+            ("Swing1H_5", new[] { "Attack1H05_R" }, 0.4f, false),
+            ("Punch", new[] { "AttackPunch01_R" }, 0.3f, false),
+            ("Hit2", new[] { "CombatDamage02" }, 0.2f, false),
+            ("Death2", new[] { "CombatDeath02" }, 1f, false),
+            ("Death3", new[] { "CombatDeath03" }, 1f, false),
+            ("Death4", new[] { "CombatDeath04" }, 1f, false),
+            ("Death5", new[] { "Death01" }, 1f, false),
+            ("Death6", new[] { "Death02" }, 1f, false),
         };
 
         const float ClubReach = 1.12f;          // Prop_TrollClub: grip to the end of the knobbly head, along socket +Y
@@ -169,6 +181,7 @@ namespace Goblins.EditorTools
                 Sizes(prefab, log);
 
                 Verify(prefab, log);
+                MakeAnims(log);
                 AssetDatabase.SaveAssets();
                 log.AppendLine("OK");
             }
@@ -359,6 +372,42 @@ namespace Goblins.EditorTools
                 if (p.graph.IsValid()) p.graph.Destroy();
                 Object.DestroyImmediate(p.go);
             }
+        }
+
+        public const string AnimsPath = Root + "/Animation/TrollAnims.asset";
+
+        /// <summary>The troll's clip set (GoblinAnimationSet, for a game's CreatureAnim / GoblinRandomAnimator), from the
+        /// checks' numbers (2026-10-23, Logs/TrollSetup): one-handed swings that keep the 1.3 m club out of the ground
+        /// (Attack1H01/03/05_R: tip -0.03 / +0.24 / +0.24 m; 02 put a hand through a leg, 04 the club 0.11 m into the
+        /// ground, the two-handed chops 0.41-0.57 m), both hit reactions, the deaths that sink least (Death02 -0.07 m,
+        /// CombatDeath02 -0.15; the others 0.28-0.42).</summary>
+        static void MakeAnims(StringBuilder log)
+        {
+            var clips = FindClips(new StringBuilder());
+            EnsureFolder(Root + "/Animation");
+            var set = AssetDatabase.LoadAssetAtPath<GoblinAnimationSet>(AnimsPath);
+            if (set == null)
+            {
+                set = ScriptableObject.CreateInstance<GoblinAnimationSet>();
+                AssetDatabase.CreateAsset(set, AnimsPath);
+            }
+            GoblinAnimationSet.Pool P(string name, float w, string[] labels, bool moves = false, float after = 0f) =>
+                new GoblinAnimationSet.Pool
+                {
+                    name = name, weight = w, moves = moves, holdAfter = after, hold = new Vector2(3, 6),
+                    clips = labels.Where(clips.ContainsKey).Select(l => clips[l]).ToArray(),
+                };
+            set.pools = new[]
+            {
+                P("Idle", 3, new[] { "Idle" }),
+                P("Walk", 2, new[] { "Walk" }, moves: true),
+                P("Run", 1, new[] { "Run" }, moves: true),
+                P("Swing", 2, new[] { "Swing1H", "Swing1H_3", "Swing1H_5" }),
+                P("Hurt", 0, new[] { "Hit", "Hit2" }),
+                P("Death", 0, new[] { "Death6", "Death2" }, after: 1.5f),
+            };
+            EditorUtility.SetDirty(set);
+            log.AppendLine($"animation set: {AnimsPath} (" + string.Join(", ", set.pools.Select(p => $"{p.name} {p.clips.Length}")) + ")");
         }
 
         static Dictionary<string, AnimationClip> FindClips(StringBuilder log)

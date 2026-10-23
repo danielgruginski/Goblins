@@ -387,6 +387,13 @@ What the clips do on the troll (checked in the scratch `unity_verify` project, b
 So the bought clips retarget well for locomotion, idles and hits, and the long arms are no trouble there; a troll with a
 club is best on one-handed swings, and the two-handed clips want a shorter reach or a ground clamp on the club.
 
+**The troll's animation set** (`Assets/Goblins/Troll/Animation/TrollAnims.asset`, a `GoblinAnimationSet` written by
+Rebuild Troll, 2026-10-23): picked from the report's numbers so the club never goes into the ground. Idle = Idle01,
+Walk = Walk01_Forward, Run = Run01_Forward; **Swing** = Attack1H01_R, Attack1H03_R, Attack1H05_R (club tip -0.03 /
++0.24 / +0.24 m, a fist brushes a leg in 1/30 frames in 03 and 05; left out: 1H02, a fist through a leg in 2/30
+frames, and 1H04, the tip -0.11 m); Hurt = CombatDamage01, 02; Death = Death02, CombatDeath02 (the shallowest
+sinks; held 1.5 s). No two-handed clips (the chop puts the club 0.41 m into the ground). The report checks each of these clips (Swing1H_2..5, Punch, Hit2, Death2..6 rows).
+
 ## Repository
 
 | Path | What |
