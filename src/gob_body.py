@@ -1,7 +1,9 @@
 """Goblin base body: procedural parts fused into one mesh, built in T-pose.
 
 build_body() -> GoblinBody (voxel-remeshed, symmetric, decimated) + GoblinEyes.
-Landmarks used by the rig and the props are stored in LM.
+Landmarks used by the rig and the props are stored in LM (always in goblin space).
+Variants grown from the goblin (the troll, troll_body.py) pass a `warp` that moves the parts before they are fused,
+their own object names and a voxel size for their scale; the defaults build the goblin.
 """
 import bpy, bmesh, math
 import numpy as np
@@ -245,22 +247,44 @@ def _apply_mod(ob, mod):
         bpy.data.meshes.remove(old)
 
 
-def build_body(voxel=0.0033, target_tris=3300):
+NAMES = dict(coll="GOB_Body", work="GOB_Work", parts="GOB_Parts", body="GoblinBody", hi="GOB_BodyHi",
+             eyes="GoblinEyes", eyes_hi="GOB_EyesHi")
+
+
+def face_share(co):
+    """Decimation weight (0 = keep, 1 = decimate freely): the goblin's face and ears keep a bit more of the budget."""
+    return 1.0 - 0.07 * float(smoothstep(0.78, 0.83, co.z))
+
+
+def build_body(voxel=0.0033, target_tris=3300, warp=None, names=None, seam_w=0.02, sole=0.0045, keep=face_share,
+               eye_c=None, eye_r=EYE_R):
+    """warp(bm, ranges): moves the parts' vertices in place before the voxel fuse; ranges lists
+    (part, first vertex, end vertex, mirrored) with part one of head / torso / leg / arm. eye_c is the left eye's
+    centre (default LM['eye_L']) and eye_r its radius."""
+    N = dict(NAMES, **(names or {}))
     scn = bpy.context.scene
-    coll = get_coll("GOB_Body")
-    work = get_coll("GOB_Work")
+    coll = get_coll(N["coll"])
+    work = get_coll(N["work"])
     bm = bmesh.new()
-    build_head(bm)
-    build_torso(bm)
+    ranges = []
+
+    def part(tag, fn, *a):
+        v0 = len(bm.verts)
+        fn(bm, *a)
+        ranges.append((tag, v0, len(bm.verts), bool(a and a[0])))
+    part('head', build_head)
+    part('torso', build_torso)
     for m in (False, True):
-        build_leg(bm, m)
-        build_arm(bm, m)
-    remove_obj("GOB_Parts")
-    parts = mesh_obj("GOB_Parts", bm, work)
+        part('leg', build_leg, m)
+        part('arm', build_arm, m)
+    if warp is not None:
+        warp(bm, ranges)
+    remove_obj(N["parts"])
+    parts = mesh_obj(N["parts"], bm, work)
     parts.hide_render = True
 
-    remove_obj("GoblinBody")
-    body = bpy.data.objects.new("GoblinBody", parts.data.copy())
+    remove_obj(N["body"])
+    body = bpy.data.objects.new(N["body"], parts.data.copy())
     coll.objects.link(body)
     mod = body.modifiers.new("remesh", 'REMESH')
     mod.mode = 'VOXEL'
@@ -272,14 +296,14 @@ def build_body(voxel=0.0033, target_tris=3300):
     bm = bmesh.new()
     bm.from_mesh(body.data)
     for v in bm.verts:            # flat soles
-        if v.co.z < 0.0045:
+        if v.co.z < sole:
             v.co.z = 0.0
     bmesh.ops.symmetrize(bm, input=bm.verts[:] + bm.edges[:] + bm.faces[:], direction='X', dist=voxel * 0.25)
     _clean(bm)
     for _ in range(2):
         bmesh.ops.smooth_laplacian_vert(bm, verts=bm.verts[:], lambda_factor=0.4, lambda_border=0.0,
                                         use_x=True, use_y=True, use_z=True, preserve_volume=True)
-    seam = [v for v in bm.verts if abs(v.co.x) < 0.02]    # hide the symmetrize crease
+    seam = [v for v in bm.verts if abs(v.co.x) < seam_w]    # hide the symmetrize crease
     for _ in range(6):
         bmesh.ops.smooth_vert(bm, verts=seam, factor=0.5, use_axis_x=False, use_axis_y=True, use_axis_z=True)
     for v in bm.verts:
@@ -288,8 +312,8 @@ def build_body(voxel=0.0033, target_tris=3300):
     bm.to_mesh(body.data)
     bm.free()
 
-    remove_obj("GOB_BodyHi")         # dense copy kept for the texture bake
-    hi = bpy.data.objects.new("GOB_BodyHi", body.data.copy())
+    remove_obj(N["hi"])              # dense copy kept for the texture bake
+    hi = bpy.data.objects.new(N["hi"], body.data.copy())
     work.objects.link(hi)
     hi.hide_render = True
     hi.hide_set(True)
@@ -303,7 +327,7 @@ def build_body(voxel=0.0033, target_tris=3300):
     # spend relatively more of the budget on the face and ears (0 = keep, 1 = decimate freely)
     g = body.vertex_groups.new(name="_decimate")
     for v in body.data.vertices:
-        g.add([v.index], 1.0 - 0.07 * float(smoothstep(0.78, 0.83, v.co.z)), 'REPLACE')
+        g.add([v.index], keep(v.co), 'REPLACE')
     dec.vertex_group = "_decimate"
     _apply_mod(body, dec)
     body.vertex_groups.remove(body.vertex_groups["_decimate"])
@@ -317,17 +341,18 @@ def build_body(voxel=0.0033, target_tris=3300):
 
     # eyes: separate spheres (skinned to the eye bones later), pole = pupil looking forward
     # the game eyes are coarse; iris and pupil are baked from the dense GOB_EyesHi copy
-    for name, seg, rings, dest in (("GoblinEyes", 12, 8, coll), ("GOB_EyesHi", 32, 24, work)):
+    ec = np.asarray(eye_c if eye_c is not None else LM['eye_L'], float)
+    for name, seg, rings, dest in ((N["eyes"], 12, 8, coll), (N["eyes_hi"], 32, 24, work)):
         bm = bmesh.new()
         for sgn in (1, -1):
-            c = LM['eye_L'] * np.array([sgn, 1, 1])
-            ellipsoid(bm, Vector(c), (EYE_R, EYE_R, EYE_R), rot=Matrix.Rotation(math.pi / 2, 3, 'X'), seg=seg, rings=rings)
+            c = ec * np.array([sgn, 1, 1])
+            ellipsoid(bm, Vector(c), (eye_r, eye_r, eye_r), rot=Matrix.Rotation(math.pi / 2, 3, 'X'), seg=seg, rings=rings)
         remove_obj(name)
         ob = mesh_obj(name, bm, dest)
         for p in ob.data.polygons:
             p.use_smooth = True
-    eyes = bpy.data.objects["GoblinEyes"]
-    bpy.data.objects["GOB_EyesHi"].hide_render = True
+    eyes = bpy.data.objects[N["eyes"]]
+    bpy.data.objects[N["eyes_hi"]].hide_render = True
     parts.hide_set(True)
     parts.hide_viewport = True
     return body, eyes

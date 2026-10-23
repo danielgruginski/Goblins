@@ -16,7 +16,9 @@ namespace Goblins
         Transform right, left, prop;
         IGoblinAnimSource driver;
 
-        void Awake()
+        void Awake() => Bind();
+
+        void Bind()
         {
             foreach (var t in GetComponentsInChildren<Transform>(true))
             {
@@ -26,8 +28,13 @@ namespace Goblins
             TryGetComponent(out driver);
         }
 
-        void LateUpdate()
+        void LateUpdate() => Apply();
+
+        /// <summary>Set the grip for the current pose now (LateUpdate does it every frame; editor tools that sample
+        /// a clip themselves call it after sampling).</summary>
+        public void Apply()
         {
+            if (right == null || left == null) Bind();
             if (right == null || left == null) return;
             if (prop == null || prop.parent != right)
                 prop = right.childCount > 0 ? right.GetChild(right.childCount - 1) : null;

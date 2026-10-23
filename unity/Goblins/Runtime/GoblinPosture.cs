@@ -18,7 +18,9 @@ namespace Goblins
         Transform hips, tSpine, tChest, tUpper, tNeck, tHead;
         IGoblinAnimSource driver;
 
-        void Awake()
+        void Awake() => Bind();
+
+        void Bind()
         {
             TryGetComponent(out driver);
             var a = GetComponent<Animator>();
@@ -30,8 +32,13 @@ namespace Goblins
             tHead = a.GetBoneTransform(HumanBodyBones.Head);
         }
 
-        void LateUpdate()
+        void LateUpdate() => Apply();
+
+        /// <summary>Bend the current pose now: LateUpdate does it every frame; editor tools that sample a clip
+        /// themselves (TrollSetup's lineup) call it after sampling.</summary>
+        public void Apply()
         {
+            if (hips == null) Bind();
             if (!GlobalEnabled || amount <= 0 || hips == null) return;
             float upright = Mathf.InverseLerp(0.5f, 0.85f, Vector3.Dot(hips.up, Vector3.up));
             if (upright <= 0) return;

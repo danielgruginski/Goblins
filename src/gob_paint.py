@@ -103,43 +103,47 @@ def _mix(a, b, t):
     return a * (1 - t) + b * t
 
 
-def body_colors(co, no, e, variant=None):
+def body_colors(co, no, e, variant=None, pal=None, nco=None):
+    """co: goblin-space positions (a variant passes its vertices' goblin-space coordinates), pal: palette (default
+    PAL), nco: where the mottling noise is sampled (default co)."""
     LM = gob_body.LM
+    PAL_ = PAL if pal is None else pal
     V = len(co)
     x, y, z = co.T
     ax = np.abs(x)
-    n1 = vnoise(co, 9.0, 1)
-    n2 = vnoise(co, 30.0, 2)
-    n3 = vnoise(co, 70.0, 3)
-    col = _mix(np.tile(PAL['skin'], (V, 1)), PAL['skin_light'], 0.5 + 0.6 * n1)
-    col = _mix(col, PAL['skin_dark'], 0.35 * np.clip(-n2, 0, 1) + 0.25 * smoothstep(0.03, 0.09, y))
-    col = _mix(col, PAL['wart'], 0.35 * smoothstep(0.55, 0.68, n3))                         # mottled spots
-    col = _mix(col, PAL['skin_dark'], 0.3 * smoothstep(0.32, 0.06, z))                      # darker shins and feet
+    nco = co if nco is None else nco
+    n1 = vnoise(nco, 9.0, 1)
+    n2 = vnoise(nco, 30.0, 2)
+    n3 = vnoise(nco, 70.0, 3)
+    col = _mix(np.tile(PAL_['skin'], (V, 1)), PAL_['skin_light'], 0.5 + 0.6 * n1)
+    col = _mix(col, PAL_['skin_dark'], 0.35 * np.clip(-n2, 0, 1) + 0.25 * smoothstep(0.03, 0.09, y))
+    col = _mix(col, PAL_['wart'], 0.35 * smoothstep(0.55, 0.68, n3))                         # mottled spots
+    col = _mix(col, PAL_['skin_dark'], 0.3 * smoothstep(0.32, 0.06, z))                      # darker shins and feet
     belly = smoothstep(-0.03, -0.09, y) * np.exp(-((z - 0.53) / 0.07) ** 2) * smoothstep(0.11, 0.05, ax)
-    col = _mix(col, PAL['belly'], 0.45 * belly)
+    col = _mix(col, PAL_['belly'], 0.45 * belly)
     ext = np.maximum(smoothstep(0.46, 0.52, ax) * (np.abs(z - 0.715) < 0.1), smoothstep(0.08, 0.04, z))
-    col = _mix(col, PAL['hand'], 0.45 * ext)
+    col = _mix(col, PAL_['hand'], 0.45 * ext)
 
     # ears: red inside the cup, green on the rim and back
     ear = smoothstep(0.092, 0.12, ax) * (z > 0.86) * (z < 1.04)
     inner = smoothstep(0.05, 0.55, -no[:, 1])
-    col = _mix(col, PAL['red'], 0.85 * ear * inner * (0.75 + 0.25 * n2))
-    col = _mix(col, PAL['blush'], 0.25 * ear * (1 - inner))
+    col = _mix(col, PAL_['red'], 0.85 * ear * inner * (0.75 + 0.25 * n2))
+    col = _mix(col, PAL_['blush'], 0.25 * ear * (1 - inner))
     # nose tip, cheeks, knuckles, elbows, knees
     d_nose = np.linalg.norm(co - LM['nose_tip'], axis=1)
-    col = _mix(col, PAL['red'], 0.75 * (1 - smoothstep(0.0, 0.055, d_nose)))
+    col = _mix(col, PAL_['red'], 0.75 * (1 - smoothstep(0.0, 0.055, d_nose)))
     for c, s, k in (((0.058, -0.103, 0.884), 0.020, 0.35), ((0.318, 0.030, 0.715), 0.022, 0.35),
                     ((0.088, -0.044, 0.248), 0.024, 0.35)):
         for sg in (1, -1):
             d2 = ((co - np.array([sg * c[0], c[1], c[2]])) ** 2).sum(1)
-            col = _mix(col, PAL['blush'], k * np.exp(-d2 / (2 * s * s)))
+            col = _mix(col, PAL_['blush'], k * np.exp(-d2 / (2 * s * s)))
     tips = []
     for f, pts in LM['fingers_L'].items():
         p2, p3 = np.array(pts[2]), np.array(pts[3])
         dvec = (p3 - p2) / np.linalg.norm(p3 - p2)
         for sg in (1, -1):          # knuckles
             k = np.exp(-((co - np.array(pts[0]) * [sg, 1, 1] - [0, 0, 0.012]) ** 2).sum(1) / (2 * 0.011 ** 2))
-            col = _mix(col, PAL['blush'], 0.3 * k)
+            col = _mix(col, PAL_['blush'], 0.3 * k)
         tips.append(p3 + dvec * 0.006)
     for dx, r, ln in ((-0.028, 0.0185, 0.060), (0.001, 0.0155, 0.058), (0.029, 0.0135, 0.050)):
         tips.append(np.array([0.100 + dx + 0.006 * np.sign(dx), -0.090 - ln - r * 0.6, 0.016]))
@@ -149,7 +153,7 @@ def body_colors(co, no, e, variant=None):
             d = np.linalg.norm(co - t * np.array([sg, 1, 1]), axis=1)
             nail = np.maximum(nail, 1 - smoothstep(0.006, 0.013, d))
     nail *= smoothstep(-0.1, 0.35, no[:, 2])
-    col = _mix(col, PAL['nail'], 0.95 * nail)
+    col = _mix(col, PAL_['nail'], 0.95 * nail)
     if variant == 'warpaint':
         col = warpaint(col, co)
     elif variant == 'chief':
@@ -249,18 +253,19 @@ def bake_skin_variant(body, hi, eyes_hi, variant, image_name, size=1024):
     return path
 
 
-def eye_colors(co):
+def eye_colors(co, pal=None):
     LM = gob_body.LM
+    PAL_ = PAL if pal is None else pal
     V = len(co)
     c = np.where(co[:, :1] > 0, LM['eye_L'], LM['eye_L'] * np.array([-1, 1, 1]))
     d = co - c
     d /= np.linalg.norm(d, axis=1)[:, None]
     ang = np.degrees(np.arccos(np.clip(-d[:, 1], -1, 1)))
-    col = np.tile(PAL['sclera'], (V, 1))
-    col = _mix(col, PAL['sclera'] * 0.6, smoothstep(60, 110, ang))
-    iris = _mix(np.tile(PAL['iris'], (V, 1)), PAL['iris_rim'], smoothstep(22, 33, ang))
+    col = np.tile(PAL_['sclera'], (V, 1))
+    col = _mix(col, PAL_['sclera'] * 0.6, smoothstep(60, 110, ang))
+    iris = _mix(np.tile(PAL_['iris'], (V, 1)), PAL_['iris_rim'], smoothstep(22, 33, ang))
     col = _mix(col, iris, smoothstep(37, 33, ang))
-    col = _mix(col, PAL['pupil'], smoothstep(15, 12, ang))
+    col = _mix(col, PAL_['pupil'], smoothstep(15, 12, ang))
     hl = np.array([-0.35, -0.85, 0.40]) / np.linalg.norm([-0.35, -0.85, 0.40])
     col = _mix(col, np.ones(3), smoothstep(0.985, 0.992, d @ hl))
     return col
@@ -381,10 +386,11 @@ def _tube_cut(region, c):
     return None
 
 
-def mark_body_seams(ob, smooth_passes=3, min_piece=8):
+def mark_body_seams(ob, smooth_passes=3, min_piece=8, pos=None):
     """Seams along natural lines: between body parts (by skin weights), down the back of trunk and head, under
     the arms, inside the legs, around the hands and feet (top / underside), and the ears and eyes (front / back).
-    Call in edit mode. Returns the label per face."""
+    Call in edit mode. Returns the label per face. pos: per-vertex goblin-space positions for the tube cuts
+    (a variant grown from the goblin passes them; default the mesh's own)."""
     me = ob.data
     rig = ob.find_armature() or bpy.data.objects.get("GoblinRig")
     names = {g.index: g.name for g in ob.vertex_groups}
@@ -453,7 +459,11 @@ def mark_body_seams(ob, smooth_passes=3, min_piece=8):
                     changed = True
         if not changed:
             break
-    cut = {f: _tube_cut(label[f].split('_')[0], f.calc_center_median()) for f in bm.faces}
+    def centre(f):
+        if pos is None:
+            return f.calc_center_median()
+        return Vector(np.mean([pos[v.index] for v in f.verts], axis=0))
+    cut = {f: _tube_cut(label[f].split('_')[0], centre(f)) for f in bm.faces}
     for e in bm.edges:
         e.seam = False
         if len(e.link_faces) != 2:
@@ -467,7 +477,7 @@ def mark_body_seams(ob, smooth_passes=3, min_piece=8):
     return {f.index: label[f] for f in bm.faces}
 
 
-def unwrap(ob, head_scale=1.7, eye_scale=2.2, ear_scale=1.3, margin=0.004, relax=60):
+def unwrap(ob, head_scale=1.7, eye_scale=2.2, ear_scale=1.3, margin=0.004, relax=60, pos=None):
     """Seam-based unwrap of the body: parts are cut open along hidden lines, unfolded (angle based), brought to
     one texel density, then the face, ears and eyes get more texels before everything is packed."""
     vl = bpy.context.view_layer
@@ -477,7 +487,7 @@ def unwrap(ob, head_scale=1.7, eye_scale=2.2, ear_scale=1.3, margin=0.004, relax
     ob.select_set(True)
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
-    labels = mark_body_seams(ob)
+    labels = mark_body_seams(ob, pos=pos)
     bpy.ops.uv.unwrap(method='ANGLE_BASED', fill_holes=True, correct_aspect=True, margin=0.0)
     bpy.ops.uv.select_all(action='SELECT')
     bpy.ops.uv.minimize_stretch(iterations=relax)          # unfolds the few slivers the flattening folds over
@@ -498,7 +508,7 @@ def unwrap(ob, head_scale=1.7, eye_scale=2.2, ear_scale=1.3, margin=0.004, relax
     return labels
 
 
-def bake(low, sources, image_name, size=1024, material_name="M_Goblin_Skin"):
+def bake(low, sources, image_name, size=1024, material_name="M_Goblin_Skin", cage=0.008, ray=0.025):
     os.makedirs(TEX_DIR, exist_ok=True)
     img = bpy.data.images.get(image_name)
     if img is not None:
@@ -529,8 +539,8 @@ def bake(low, sources, image_name, size=1024, material_name="M_Goblin_Skin"):
         s.select_set(True)
     low.select_set(True)
     bpy.context.view_layer.objects.active = low
-    bpy.ops.object.bake(type='EMIT', use_selected_to_active=True, cage_extrusion=0.008,
-                        max_ray_distance=0.025, margin=8, use_clear=True)
+    bpy.ops.object.bake(type='EMIT', use_selected_to_active=True, cage_extrusion=cage,
+                        max_ray_distance=ray, margin=8, use_clear=True)
     for s in sources:
         h, hv, hr = hidden[s.name]
         s.select_set(False)
@@ -548,8 +558,9 @@ def bake(low, sources, image_name, size=1024, material_name="M_Goblin_Skin"):
 
 
 # ----------------------------------------------------------------------------------------- mouth (per texel)
-def bake_positions(low, size):
-    """Object-space position of every texel of the low mesh (float image, +1 offset so all values are > 0)."""
+def bake_positions(low, size, attr=None):
+    """Object-space position of every texel of the low mesh (float image, +1 offset so all values are > 0).
+    attr: bake that point attribute (a FLOAT_VECTOR position, e.g. a variant's goblin-space coordinates) instead."""
     img = bpy.data.images.get("_GOB_Pos")
     if img is not None:
         bpy.data.images.remove(img)
@@ -561,11 +572,16 @@ def bake_positions(low, size):
     nt.nodes.clear()
     out = nt.nodes.new('ShaderNodeOutputMaterial')
     em = nt.nodes.new('ShaderNodeEmission')
-    tc = nt.nodes.new('ShaderNodeTexCoord')
     add = nt.nodes.new('ShaderNodeVectorMath')
     add.operation = 'ADD'
     add.inputs[1].default_value = (1, 1, 1)
-    nt.links.new(tc.outputs['Object'], add.inputs[0])
+    if attr is None:
+        tc = nt.nodes.new('ShaderNodeTexCoord')
+        nt.links.new(tc.outputs['Object'], add.inputs[0])
+    else:
+        at = nt.nodes.new('ShaderNodeAttribute')
+        at.attribute_name = attr
+        nt.links.new(at.outputs['Vector'], add.inputs[0])
     nt.links.new(add.outputs['Vector'], em.inputs['Color'])
     nt.links.new(em.outputs['Emission'], out.inputs['Surface'])
     tex = nt.nodes.new('ShaderNodeTexImage')
@@ -594,11 +610,12 @@ def bake_positions(low, size):
     return buf - 1.0, valid
 
 
-def paint_mouth(low, image_name="T_Goblin_Skin"):
-    """Wide grin painted per texel: dark mouth band, upper teeth, two underbite fangs over the upper lip."""
+def paint_mouth(low, image_name="T_Goblin_Skin", pos_attr=None):
+    """Wide grin painted per texel: dark mouth band, upper teeth, two underbite fangs over the upper lip.
+    pos_attr: the low mesh's goblin-space position attribute (variants grown from the goblin)."""
     img = bpy.data.images[image_name]
     size = img.size[0]
-    P, valid = bake_positions(low, size)
+    P, valid = bake_positions(low, size, attr=pos_attr)
     HC, HR = gob_body.HC, gob_body.HR
     q = (P - HC) / HR
     rn = np.linalg.norm(q, axis=-1) + 1e-9

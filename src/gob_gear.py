@@ -283,8 +283,8 @@ def closed_spline(pts, per_seg=PS(8)):
 class BodySurface:
     """Rest-pose body surface for projection and weight transfer."""
 
-    def __init__(self):
-        self.ob = bpy.data.objects["GoblinBody"]
+    def __init__(self, name="GoblinBody"):
+        self.ob = bpy.data.objects[name]
         self.bm = bmesh.new()
         self.bm.from_mesh(self.ob.data)
         self.bm.faces.ensure_lookup_table()
@@ -318,8 +318,8 @@ class BodySurface:
         self.bm.free()
 
 
-def skin_to_rig(ob, surf, hips_blend=None, limit=4):
-    rig = bpy.data.objects[RIG]
+def skin_to_rig(ob, surf, hips_blend=None, limit=4, rig=None):
+    rig = rig or bpy.data.objects[RIG]
     ob.vertex_groups.clear()
     groups = {}
     for v in ob.data.vertices:
@@ -1393,8 +1393,8 @@ PROPS = [
 ]
 
 
-def attach(ob, socket):
-    rig = bpy.data.objects[RIG]
+def attach(ob, socket, rig=None):
+    rig = rig or bpy.data.objects[RIG]
     bone = rig.data.bones[socket]
     ob.parent = rig
     ob.parent_type = 'BONE'
@@ -1403,14 +1403,14 @@ def attach(ob, socket):
     ob.matrix_basis = Matrix.Translation((0, -bone.length, 0))
 
 
-def build_prop(name, fn, socket, mats, coll):
-    rig = bpy.data.objects[RIG]
+def build_prop(name, fn, socket, mats, coll, rig=None):
+    rig = rig or bpy.data.objects[RIG]
     b, space = fn()
     if space == 'world':
         M = rig.matrix_world @ rig.data.bones[socket].matrix_local
         bmesh.ops.transform(b.bm, matrix=M.inverted(), verts=b.bm.verts[:])
     ob = _finish(name, b, coll, mats)
-    attach(ob, socket)
+    attach(ob, socket, rig)
     ob["socket"] = socket
     return ob
 
@@ -1450,8 +1450,9 @@ def uv_report(objs):
     return {k: v for k, v in out.items() if v}
 
 
-def bake_gear(objs, size=1024, name="T_Goblin_Gear", samples=24, margin=0.0035):
-    """Pack the construction UVs of all gear into one atlas (even texel density) and bake the painted materials."""
+def bake_gear(objs, size=1024, name="T_Goblin_Gear", samples=24, margin=0.0035, rig=None, game_mat="M_Goblin_Gear"):
+    """Pack the construction UVs of all gear into one atlas (even texel density) and bake the painted materials.
+    rig / game_mat: a variant's armature and gear material (default the goblin's)."""
     os.makedirs(TEX_DIR, exist_ok=True)
     img = bpy.data.images.get(name)
     if img is not None:
@@ -1484,7 +1485,7 @@ def bake_gear(objs, size=1024, name="T_Goblin_Gear", samples=24, margin=0.0035):
     scn.render.engine = 'CYCLES'
     scn.cycles.samples = samples
     # rest pose for the bake
-    rig = bpy.data.objects[RIG]
+    rig = rig or bpy.data.objects[RIG]
     prev_pose = rig.data.pose_position
     rig.data.pose_position = 'REST'
     bpy.ops.object.bake(type='EMIT', margin=4, use_clear=True)
@@ -1495,7 +1496,7 @@ def bake_gear(objs, size=1024, name="T_Goblin_Gear", samples=24, margin=0.0035):
     img.file_format = 'PNG'
     img.save()
     # swap the painted source materials for the single game material
-    gm = bpy.data.materials.get("M_Goblin_Gear") or bpy.data.materials.new("M_Goblin_Gear")
+    gm = bpy.data.materials.get(game_mat) or bpy.data.materials.new(game_mat)
     gm.use_nodes = True
     nt = gm.node_tree
     nt.nodes.clear()

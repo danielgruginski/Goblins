@@ -3,16 +3,21 @@ Copies the goblins into a Unity project, under Assets/Goblins (the layout Mediev
   unity/Goblins/Runtime, Editor              -> Assets/Goblins/Scripts/Runtime, Editor
   export/Goblin.fbx, export/Props, export/Anims -> Assets/Goblins/Models, Models/Props, Models/Anims
   textures/T_Goblin_*.png                     -> Assets/Goblins/Textures
+  the troll: export/Troll/Troll.fbx, export/Troll/Props, textures/T_Troll_*.png
+                                              -> Assets/Goblins/Troll/Models, Models/Props, Textures
 Files are overwritten in place; their .meta files (import settings, prefab references) are kept.
-Afterwards, in Unity: Tools > Goblins > Rebuild Prefabs and Showcase (it runs by itself the first time).
+Afterwards, in Unity: Tools > Goblins > Rebuild Prefabs and Showcase, and Tools > Goblins > Rebuild Troll (each runs
+by itself the first time).
 
 Usage:
   powershell -ExecutionPolicy Bypass -File tools\install_to_unity.ps1 -Project E:\Unity\Projects\MedievalSetting
   add -ScriptsOnly to copy only the C# scripts
+  add -Troll to copy only the C# scripts and the troll (the goblins' models stay as they are)
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Project,
-    [switch]$ScriptsOnly
+    [switch]$ScriptsOnly,
+    [switch]$Troll
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -30,10 +35,16 @@ function Copy-Into([string]$from, [string]$filter, [string]$to) {
 
 Copy-Into (Join-Path $root 'unity\Goblins\Runtime') '*.cs' (Join-Path $dst 'Scripts\Runtime')
 Copy-Into (Join-Path $root 'unity\Goblins\Editor') '*.cs' (Join-Path $dst 'Scripts\Editor')
-if (-not $ScriptsOnly) {
+if (-not $ScriptsOnly -and -not $Troll) {
     Copy-Into (Join-Path $root 'export') 'Goblin.fbx' (Join-Path $dst 'Models')
     Copy-Into (Join-Path $root 'export\Props') '*.fbx' (Join-Path $dst 'Models\Props')
     Copy-Into (Join-Path $root 'export\Anims') '*.fbx' (Join-Path $dst 'Models\Anims')
     Copy-Into (Join-Path $root 'textures') 'T_Goblin_*.png' (Join-Path $dst 'Textures')
 }
-Write-Host 'Done. In Unity: Tools > Goblins > Rebuild Prefabs and Showcase'
+if (-not $ScriptsOnly -and (Test-Path (Join-Path $root 'export\Troll\Troll.fbx'))) {
+    Copy-Into (Join-Path $root 'textures') 'T_Troll_*.png' (Join-Path $dst 'Troll\Textures')
+    Copy-Into (Join-Path $root 'export\Troll\Props') '*.fbx' (Join-Path $dst 'Troll\Models\Props')
+    Copy-Into (Join-Path $root 'export\Troll') 'Troll.fbx' (Join-Path $dst 'Troll\Models')
+}
+if ($Troll) { Write-Host 'Done. In Unity: Tools > Goblins > Rebuild Troll' }
+else { Write-Host 'Done. In Unity: Tools > Goblins > Rebuild Prefabs and Showcase (and Rebuild Troll)' }

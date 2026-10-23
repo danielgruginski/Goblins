@@ -35,6 +35,7 @@ gob_anim.clear()           # back to the T-pose before exporting the character a
 | `gob_export.py` | FBX for Unity |
 | `gob_anim.py` | Custom clips keyframed through the rig's IK and baked on export (the archer's and the shaman's) |
 | `gob_crossbow.py` | Crossbow clips for the game's humans (scene **Goblin_Crossbow**), posed from the weapon kit's crossbow |
+| `troll_body.py`, `troll_paint.py`, `troll_gear.py`, `troll_build.py` | The troll, grown from the goblin's builders (see **Troll** below; `blender/troll.blend`, run by `tools/troll_run.py`) |
 
 ## Budget (colony camera, ~40 m at 50°, no LODs)
 
@@ -325,16 +326,79 @@ every goblin's look, and its labels can show each goblin's look instead of the c
 - The on-screen panel has camera presets (colony 40 m / mid / close; right-drag orbits, scroll zooms), a hunch
   toggle, time scale, reshuffle, and clip names over heads.
 
+## Troll
+
+A unit from Daniel's card game: "Trolls would look like goblins, slender with long arms and legs". The troll is the
+approved goblin grown to 2.49 m: the goblin's own part builders make the parts in goblin space and a warp
+(`troll_body.TrollWarp`) moves them into troll space before they are fused, so it has the goblin's skeleton (same
+Humanoid names, hierarchy, rolls and sockets), its face and hands, and its paint masks.
+
+![The troll on Kevin Iglesias clips in Unity](docs/images/troll_lineup.png)
+
+Blender file: `blender/troll.blend` (its own file; goblins.blend is untouched), scene **Troll** (the troll with club,
+hair and loincloth), **Troll_Compare** (next to a goblin appended from goblins.blend and a 1.75 m mannequin),
+**Troll_Game** (the game camera: 22 m, 50°, fov 30). Rebuild headless:
+
+```
+"D:\Program Files\Blender Foundation\Blender 4.4\blender.exe" -b --factory-startup --python tools\troll_run.py -- build review export
+```
+
+or in Blender: `import troll_build as T; T.build_all(); T.review(); T.export()`. `build` is ~40 s, `review` writes
+`renders/troll_*.png` (views, face, hands, feet, club, UV layouts over the textures, each shape key, the size comparison,
+the game camera and a 4x crop of it, three test poses with joint close-ups).
+
+| | |
+|---|---|
+| Height | 2.49 m in the bind pose (head bone 2.10 m); about 2.4 m standing in an idle with `GoblinPosture` |
+| Proportions | hips 1.24 m, knees 0.67 m, shoulders 1.91 m; shoulder to fingertip 1.33 m, so straight arms hang to 0.58 m (below the knee) and the Blender arms-down pose to 0.75 m; feet 0.54 m, hands 0.40 m long |
+| Shape | slender trunk without the goblin's pot belly, hump and shrugged shoulders, the head forward on a longer neck; a longer, heavier jaw, a bulbous drooping nose, small deep-set eyes under a heavier brow, big ears tipped out level |
+| Skin | `T_Troll_Skin` 1024², stony grey-blue with dark blotches, moss on the shoulders, back and crown, warts, a paler belly, mauve ear insides, dark horn nails, yellow eyes (my call, not reviewed) |
+| Gear | `T_Troll_Gear` 1024², material `M_Troll_Gear`: `Prop_TrollClub` (Socket_RightHand: a 1.3 m gnarled branch, burls, two lopped stubs, rawhide grip), `Prop_TrollHair` (Socket_Helm: a lank tuft over the crown and down the nape), `Outfit_TrollLoincloth` (skinned: rope belt, ragged hide flaps front and back) |
+| Triangles | body 5,336 (eyes included), loincloth 524, club 894, hair 630: **7,384** dressed |
+| Shape keys | Fat, Skinny, Brawny, EarsDroop, EarTornL, EarTornR: the goblin's, computed in goblin space and carried over; the loincloth follows the build keys |
+
+Changing it: the proportions are the `P` table in `troll_body.py` (goblin units times `S`, the growth); the skin is
+`troll_paint.TPAL` and `troll_colors`; the gear is in `troll_gear.py`. The goblin's modules gained optional
+parameters for this (`gob_body.build_body(warp=..., names=...)`, `gob_rig.build_armature(name, table, ik_rows)`,
+`gob_paint` palette / goblin-space positions / bake distances, `gob_gear` body, rig and gear material names); their
+defaults build the goblin as before.
+
+**Unity:** `tools\install_to_unity.ps1 -Project <project> -Troll` copies the scripts and the troll
+(`Assets/Goblins/Troll/Models/Troll.fbx`, `Models/Props/Prop_Troll*.fbx`, `Textures/T_Troll_*.png`; a plain install copies
+it too). **Tools > Goblins > Rebuild Troll** (`TrollSetup.cs`; it runs by itself once) makes the materials (skin plus
+Moss, Dark and Stone tints), the prop prefabs and `Assets/Goblins/Troll/Prefabs/Troll.prefab`: Humanoid Animator,
+`GoblinAppearance` (`bodyName` TrollBody, club always, hair 2:1, Skinny / Brawny / Fat, ear shapes, 0.95–1.06×,
+merged into one mesh), `GoblinPosture` and `GoblinTwoHandGrip`. Then, in a preview scene (no open scene is touched), it
+plays the troll on Kevin Iglesias *Human Animations* clips with the hunch and writes `Logs/TrollSetup`: a lineup, the
+lineup from the game camera, a strip of six frames per clip, and `setup_report.txt` with, per clip, the troll's and the
+goblin's numbers: the lowest point of the body, the head's range, how close the hands come to the legs, the fists'
+spread in two-handed clips and the club's tip.
+
+What the clips do on the troll (checked in the scratch `unity_verify` project, batch mode):
+
+| Clip | Troll | Goblin |
+|---|---|---|
+| Idle01, Walk01, Run01, CombatDamage01 | fine; feet dip 3–4 cm at heel strike (as the goblin), hands clear of the legs by 11+ cm, club tip 0.45 m+ above the ground | same dips |
+| Attack2H02 (two-handed chop) | fists 0.32–0.52 m apart on the club (the grip holds), **the club's tip goes 0.41 m into the ground** at the bottom of the chop | fists 0.10–0.15 m |
+| Attack2H04 (leaping chop) | **leaps 1 m** (the human's jump scaled by leg length), fists up to 1.27 m apart, hands into the knees in 10 of 30 frames, club tip −0.57 m | leaps 0.37 m |
+| Attack1H01_R (one-handed swing) | clean: the club's tip just reaches the ground (−0.03 m) | — |
+| CombatDeath01 | lies down, but sinks up to 0.42 m into the ground at its lowest (ears, arms) | sinks 0.26 m |
+
+So the bought clips retarget well for locomotion, idles and hits, and the long arms are no trouble there; a troll with a
+club is best on one-handed swings, and the two-handed clips want a shorter reach or a ground clamp on the club.
+
 ## Repository
 
 | Path | What |
 |---|---|
 | `src/` | the Blender Python that builds everything |
 | `blender/goblins.blend` | the working file (16 MB) |
-| `export/` | Unity-ready FBX: `Goblin.fbx`, `Props/`, `Anims/` |
+| `blender/troll.blend` | the troll's file (19 MB), built by `tools/troll_run.py` |
+| `export/` | Unity-ready FBX: `Goblin.fbx`, `Props/`, `Anims/`; `Troll/Troll.fbx`, `Troll/Props/` |
 | `textures/` | baked skins and gear atlas |
 | `unity/Goblins/` | the Unity scripts (`Runtime/`, `Editor/`); `unity/Verify/` is the batch-mode export check |
-| `tools/install_to_unity.ps1` | copies all of it into a Unity project |
+| `tools/install_to_unity.ps1` | copies all of it into a Unity project (`-Troll`: the scripts and the troll only) |
+| `tools/troll_run.py` | headless driver for the troll (build, review, export) |
 | `docs/images/` | the pictures in this README |
 | `HANDOFF.md` | conventions, open issues and checks for whoever picks this up next |
 

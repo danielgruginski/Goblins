@@ -71,6 +71,8 @@ namespace Goblins
         public Material[] skins = Array.Empty<Material>();
         public Vector2 scale = new Vector2(0.92f, 1.08f);
         public bool merge = true;
+        [Tooltip("The skinned body the skins go on (TrollBody on the troll).")]
+        public string bodyName = "GoblinBody";
 
         public int Seed { get; private set; }
         public bool Merged => combined != null && combined.enabled;
@@ -186,7 +188,7 @@ namespace Goblins
 
             if (skins.Length > 0)
             {
-                var body = Find("GoblinBody");
+                var body = Find(bodyName);
                 var smr = body != null ? body.GetComponent<SkinnedMeshRenderer>() : null;
                 if (smr != null)
                 {
@@ -293,7 +295,7 @@ namespace Goblins
                 cache[key] = mesh;
             }
 
-            var body = sources.OfType<SkinnedMeshRenderer>().FirstOrDefault(s => s.name == "GoblinBody") ?? sources.OfType<SkinnedMeshRenderer>().FirstOrDefault();
+            var body = sources.OfType<SkinnedMeshRenderer>().FirstOrDefault(s => s.name == bodyName) ?? sources.OfType<SkinnedMeshRenderer>().FirstOrDefault();
             combined.bones = bones.ToArray();
             combined.rootBone = body != null ? body.rootBone : transform;
             combined.sharedMesh = mesh;

@@ -91,16 +91,17 @@ IK = [
 ]
 
 
-def build_armature(coll_name="GOB_Rig"):
+def build_armature(coll_name="GOB_Rig", name=RIG, table=None, ik_rows=IK):
+    """table: bone_table() rows (default: the goblin's); ik_rows: IK rows. A variant passes its own (troll_body)."""
     coll = get_coll(coll_name)
-    old = bpy.data.objects.get(RIG)
+    old = bpy.data.objects.get(name)
     if old is not None:
         arm_data = old.data
         bpy.data.objects.remove(old, do_unlink=True)
         bpy.data.armatures.remove(arm_data)
-    ad = bpy.data.armatures.new(RIG)
+    ad = bpy.data.armatures.new(name)
     ad.display_type = 'OCTAHEDRAL'
-    ob = bpy.data.objects.new(RIG, ad)
+    ob = bpy.data.objects.new(name, ad)
     coll.objects.link(ob)
     ob.show_in_front = True
     vl = bpy.context.view_layer
@@ -110,7 +111,7 @@ def build_armature(coll_name="GOB_Rig"):
     ob.select_set(True)
     bpy.ops.object.mode_set(mode='EDIT')
     eb = ad.edit_bones
-    table = bone_table()
+    table = table if table is not None else bone_table()
     for n, h, t, p, r, d in table:
         b = eb.new(n)
         b.head, b.tail = Vector(h), Vector(t)
@@ -120,7 +121,7 @@ def build_armature(coll_name="GOB_Rig"):
         if p:
             eb[n].parent = eb[p]
             eb[n].use_connect = (Vector(eb[p].tail) - Vector(eb[n].head)).length < 1e-5 and not n.startswith("Socket")
-    for ctl, src, pole, pole_pos, chain_bone, infl in IK:
+    for ctl, src, pole, pole_pos, chain_bone, infl in ik_rows:
         s = eb[src]
         c = eb.new(ctl)
         c.head, c.tail, c.roll = s.head.copy(), s.tail.copy(), s.roll
@@ -154,7 +155,7 @@ def build_armature(coll_name="GOB_Rig"):
             b.color.palette = 'THEME01'
 
     # IK constraints with pole angles solved so the rest pose is unchanged
-    for ctl, src, pole, pole_pos, chain_bone, infl in IK:
+    for ctl, src, pole, pole_pos, chain_bone, infl in ik_rows:
         pb = ob.pose.bones[chain_bone]
         ik = pb.constraints.new('IK')
         ik.name = "IK"

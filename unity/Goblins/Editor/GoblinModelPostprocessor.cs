@@ -7,7 +7,8 @@ using UnityEngine;
 namespace Goblins.EditorTools
 {
     /// <summary>
-    /// Imports Goblin*.fbx as Humanoid and pins the optional Jaw to the "Jaw" bone. The goblin and its props import with
+    /// Imports Goblin*.fbx and Troll*.fbx (the troll, grown from the goblin's skeleton) as Humanoid and pins the optional
+    /// Jaw to the "Jaw" bone. The goblin, the troll and their props import with
     /// Read/Write on: GoblinAppearance merges a goblin's parts into one mesh at run time, and reads theirs to do it
     /// (without it a goblin in a game is merged empty: invisible).
     ///
@@ -19,7 +20,8 @@ namespace Goblins.EditorTools
     {
         // Goblin@<clip>.fbx animation files copy Goblin.fbx's avatar instead (GoblinSetup.ConfigureClips)
         static bool IsGoblin(string path) =>
-            Path.GetFileName(path).StartsWith("Goblin", StringComparison.OrdinalIgnoreCase) &&
+            (Path.GetFileName(path).StartsWith("Goblin", StringComparison.OrdinalIgnoreCase) ||
+             Path.GetFileName(path).StartsWith("Troll", StringComparison.OrdinalIgnoreCase)) &&
             !Path.GetFileName(path).Contains("@") &&
             path.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase);
 
@@ -34,7 +36,8 @@ namespace Goblins.EditorTools
         }
 
         static bool IsProp(string path) =>
-            path.Replace('\\', '/').IndexOf("Goblins/Models/Props/", StringComparison.OrdinalIgnoreCase) >= 0 &&
+            (path.Replace('\\', '/').IndexOf("Goblins/Models/Props/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+             path.Replace('\\', '/').IndexOf("Goblins/Troll/Models/Props/", StringComparison.OrdinalIgnoreCase) >= 0) &&
             path.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase);
 
         void OnPreprocessModel()

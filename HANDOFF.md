@@ -91,7 +91,58 @@ Done:
   least rotation from the resting grip (`_knuckles_for`), and own clips key every frame between the key poses
   (`build_own`: matrices eased, turns slerped, the IK solving each frame).
 
+- troll (2026-10-23, a unit from Daniel's card game: "Trolls would look like goblins, slender with long arms and legs,
+  may be hard to animate those though"; "keep moving on the creatures", "don't bother with adding them to the game,
+  build the creatures"). The plan he saw: start from the approved goblin body, stretch it to about 2.4–2.6 m with long
+  arms and legs, test whether bought Humanoid clips retarget. Built (README > Troll):
+  - `src/troll_body.py` (`TrollWarp`: goblin space -> troll space per part, the troll's bone table and IK poles, the
+    goblin-space position of every troll vertex), `troll_paint.py` (skin, shape keys), `troll_gear.py` (club, hair,
+    loincloth, own atlas), `troll_build.py` (build, review renders, size comparison, game camera, test poses, export),
+    `tools/troll_run.py` (headless). Own file `blender/troll.blend` (scenes Troll, Troll_Compare, Troll_Game), so the
+    live goblins.blend is never saved over; built headless while another session had the live Blender.
+  - The goblin modules only gained optional parameters (`gob_body.build_body` warp / names / eyes / decimation weights,
+    `gob_rig.build_armature` name / table / IK rows, `gob_paint` palette, noise and seam positions, bake cage and ray,
+    a position attribute for the mouth; `gob_gear` body, rig and gear material names). Checked: a goblin
+    `gob_build.build_all()` with the old and the new code (textures redirected to a scratch folder) gives the same body
+    geometry, weights, shape keys, dense-mesh paint and rig.
+  - Unity: `TrollSetup.cs` (Tools > Goblins > Rebuild Troll, auto once), `GoblinModelPostprocessor` also takes
+    `Troll*.fbx` (Humanoid, Jaw pin, Read/Write) and `Goblins/Troll/Models/Props/`, `GoblinAppearance.bodyName`
+    (default GoblinBody), `GoblinPosture.Apply()` / `GoblinTwoHandGrip.Apply()` for tools that sample clips themselves.
+    The install script's `-Troll` copies the scripts and the troll only. Compiled offline against MedievalSetting's
+    editor assemblies (no output in the project) and run in the scratch `unity_verify` project in batch mode:
+    `Unity.exe -batchmode -projectPath unity_verify -executeMethod Goblins.EditorTools.TrollSetup.Build -quit`
+    (avatar valid, 49 bones, Jaw -> Jaw, 7,384 triangles, 2.49 m; clip numbers in README > Troll). unity_verify now
+    holds the current goblin scripts, the troll and ten Kevin clip FBX copied from MedievalSetting (with HumanM_Model and
+    the full-body mask, which their import settings need).
+  - My calls, not reviewed by Daniel: the stony grey-blue skin with moss (to read apart from the olive goblins at the
+    game camera), the branch club, the hair tuft, the hide loincloth, the bulbous nose and level ears, the setup's
+    look table (club always, hair 2:1, Skinny 30% / Brawny 25% / Fat 10%, Moss / Dark / Stone tints).
+  - Gotchas:
+    - **The goblin build is not bit-exact run to run** (seen with the old code too): UV packing, the outfits and props
+      projected on the body (FurMantle, ShamanCloak, Harness, Sack, Quiver move up to ~9 mm), their weights, and so the
+      textures. Compare builds numerically (geometry, weights, keys, paint), not by file hashes.
+    - The fused troll has no part layers (voxel remesh drops attributes): `transfer_gob_co` takes the goblin-space
+      position and the part from the nearest point of the warped parts (`TRL_Parts` keeps them as attributes).
+    - The goblin's `LM['nose_tip']` is the end of the nose's tip cap: scaling along the nose axis squashed the cap flat
+      until the cap was scaled with the width (`nose_end` = the last loft row).
+    - The troll needs a deeper bake cage (0.011·S / 0.035·S): the goblin's (0.008 / 0.025, scaled) left black texels.
+    - Previewing shape keys: reset the loincloth's keys with the body's; a leftover Skinny on the outfit pulls the belt
+      into the body.
+    - Kevin clips in a scratch project: their metas copy the avatar of `Models/HumanM_Model.fbx` and use
+      `Avatar Masks/Human Body Full Mask.mask`; copy both (with metas) or the clips import without a human avatar.
+
 ## Open / next
+
+- **Troll:**
+  - not seen by Daniel; not in MedievalSetting (install with `-Troll`, then Tools > Goblins > Rebuild Troll) and not
+    played;
+  - two-handed clips: Attack2H02's chop drives the club's tip 0.41 m into the ground, Attack2H04 leaps 1 m and spreads
+    the fists 1.27 m; one-handed swings (Attack1H01_R: tip −0.03 m) suit the club; else a ground clamp or left-hand IK;
+  - death clips sink the troll up to 0.42 m into the ground (the goblin 0.26 m): dead trolls as props would need the
+    `GoblinCorpses` lift;
+  - the hair reads as a flat cap from the front; the eyes are small and the lids subtle; the face shows facets up
+    close (5,336-triangle body); 12 black texels left in the skin bake;
+  - no troll clips of its own (roar, club drag), no LODs.
 
 - **Still to build:** bard, grenadier (medieval firepots or bombs, with a throw clip from `gob_anim`); a mounted
   archer (warg riders have spear and sword only).
@@ -113,3 +164,9 @@ Done:
     `RenderPipeline.SubmitRenderRequest` (`Unity_Camera_Capture` fails in play mode).
 - **Batch:** `unity/Verify/GoblinVerify.cs` in a scratch project checks the avatar, the sockets, and the
   prop-versus-embedded placement (0.000 mm).
+- **Troll:**
+  - Blender: `tools/troll_run.py -- build review export`; the build report should show `weights.unweighted 0`,
+    `uv_missing {}`, `tris_total` ~7,400; look at `renders/troll_*` (face, hands, UV layouts, `troll_game_22m_x4`,
+    the `troll_pose_*_close` joints) at full size;
+  - Unity: `Logs/TrollSetup/setup_report.txt` should show `avatar valid=True human=True bones=49 jaw=Jaw`, every clip
+    `human=True`, and per-clip numbers like README > Troll's table; look at `troll_lineup*.png` and `troll_clip_*.png`.
