@@ -3,8 +3,8 @@ Copies the goblins into a Unity project, under Assets/Goblins (the layout Mediev
   unity/Goblins/Runtime, Editor              -> Assets/Goblins/Scripts/Runtime, Editor
   export/Goblin.fbx, export/Props, export/Anims -> Assets/Goblins/Models, Models/Props, Models/Anims
   textures/T_Goblin_*.png                     -> Assets/Goblins/Textures
-  the troll: export/Troll/Troll.fbx, export/Troll/Props, textures/T_Troll_*.png
-                                              -> Assets/Goblins/Troll/Models, Models/Props, Textures
+  the troll: export/Troll/Troll.fbx, export/Troll/Props, export/Troll/Anims (Troll@*.fbx, troll_clips.json),
+             textures/T_Troll_*.png      -> Assets/Goblins/Troll/Models, Models/Props, Models/Anims, Textures
 Files are overwritten in place; their .meta files (import settings, prefab references) are kept.
 Afterwards, in Unity: Tools > Goblins > Rebuild Prefabs and Showcase, and Tools > Goblins > Rebuild Troll (each runs
 by itself the first time).
@@ -45,6 +45,10 @@ if (-not $ScriptsOnly -and (Test-Path (Join-Path $root 'export\Troll\Troll.fbx')
     Copy-Into (Join-Path $root 'textures') 'T_Troll_*.png' (Join-Path $dst 'Troll\Textures')
     Copy-Into (Join-Path $root 'export\Troll\Props') '*.fbx' (Join-Path $dst 'Troll\Models\Props')
     Copy-Into (Join-Path $root 'export\Troll') 'Troll.fbx' (Join-Path $dst 'Troll\Models')
+    if (Test-Path (Join-Path $root 'export\Troll\Anims')) {
+        Copy-Into (Join-Path $root 'export\Troll\Anims') 'Troll@*.fbx' (Join-Path $dst 'Troll\Models\Anims')
+        Copy-Into (Join-Path $root 'export\Troll\Anims') 'troll_clips.json' (Join-Path $dst 'Troll\Models\Anims')
+    }
 }
 if ($Troll) { Write-Host 'Done. In Unity: Tools > Goblins > Rebuild Troll' }
 else { Write-Host 'Done. In Unity: Tools > Goblins > Rebuild Prefabs and Showcase (and Rebuild Troll)' }

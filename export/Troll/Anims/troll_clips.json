@@ -1,0 +1,25 @@
+{
+ "clips": [
+  {
+   "name": "Roar",
+   "frames": 84,
+   "fps": 30,
+   "loop": false,
+   "rootMotion": false,
+   "events": [
+    {
+     "name": "Roar",
+     "time": 1.0
+    }
+   ]
+  },
+  {
+   "name": "ClubDrag",
+   "frames": 60,
+   "fps": 30,
+   "loop": true,
+   "rootMotion": true,
+   "events": []
+  }
+ ]
+}

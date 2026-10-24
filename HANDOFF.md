@@ -131,6 +131,35 @@ Done:
     - Kevin clips in a scratch project: their metas copy the avatar of `Models/HumanM_Model.fbx` and use
       `Avatar Masks/Human Body Full Mask.mask`; copy both (with metas) or the clips import without a human avatar.
 
+- troll clips + grounded deaths (2026-10-23, Daniel on the list of the troll's rough edges: "Do the number 4"; README >
+  "The troll's own clips and grounded deaths"):
+  - `src/troll_anim.py`: **Roar** (2.8 s, event Roar at 1.0 s) and **ClubDrag** (2.0 s loop, root motion, the club
+    trailing on the ground behind the right side), keyed through TrollRig's IK every frame, exported to
+    `export/Troll/Anims/Troll@<clip>.fbx` + `troll_clips.json`. Hands by comfort: `_arm` places the wrist and turns
+    the hand from its forearm by twist / flex / deviation inside `COMFORT`; the club's ground contact is solved
+    through the deviation. Every wrist number stays at or under flex 17°, deviation 18°, forearm twist 80.5°,
+    upper-arm twist 59°; the drag's club is 9 mm over the ground in every frame (Unity +3..+15 mm). `tools/troll_run.py -- anims
+    anim_review`; scene **Troll_Anim** in troll.blend (`TA.use("Roar")`).
+  - The first attempt at this round died on a server error; its `troll_anim.py` was reworked: it aimed the club and
+    let the wrist take the rest (Roar wrists up to 70° bent, 87° deviated, 150° twisted).
+  - Unity: `TrollSetup.ConfigureClips` (Humanoid on Troll.fbx's avatar, loop / root motion / events from the JSON),
+    `Runtime/GoblinEvents.cs` (`OnGoblinEvent`, on the Troll prefab), pools Roar and ClubDrag (`upright`) in
+    TrollAnims; `GroundDeaths` makes `Animation/Death02_Grounded.anim` and `CombatDeath02_Grounded.anim` (end pose
+    −0.066 / −0.068 m → +0.000 / −0.001 m) and the set's Death pool plays them. Checked in unity_verify (batch mode,
+    no errors or warnings in the report).
+  - My calls, not reviewed by Daniel: the roar's shape (club raised high to the right, the left hand clawed out), the
+    drag's deep stoop and the club trailing ~60° out from straight back (the comfortable grips; straighter back costs
+    a 31° wrist deviation and a 63° upper-arm twist), ClubDrag as its own pool rather than a Walk variant, grounding
+    by a rigid tilt + lift of the body rather than a lift during play.
+  - Gotchas:
+    - **The club leaves the thumb side of the fist**: with the arm hanging, palm in, it points forward. Trailing it
+      behind needs the palm turned forward (forearm twist ~80°) and the upper arm turned.
+    - **Humanoid IK goal curves (LeftFootT ...) follow the body**: moving them with RootT/RootQ put the feet 3 cm under
+      with foot IK on. Move RootT/RootQ only.
+    - `AnimationClip.averageSpeed` of a Humanoid clip is in clip units (ClubDrag showed 0.46 for 0.76 m/s); measure
+      root motion by playing the clip with `applyRootMotion` (`TrollSetup.PerFrame`).
+    - Reading `Animator.bodyPosition` outside OnAnimatorIK logs a warning per read; the setup's log filter drops it.
+
 ## Open / next
 
 - **Troll:**
@@ -139,11 +168,16 @@ Done:
   - two-handed clips: Attack2H02's chop drives the club's tip 0.41 m into the ground, Attack2H04 leaps 1 m and spreads
     the fists 1.27 m; so `TrollAnims` (2026-10-23, README "The troll's animation set") swings one-handed only
     (Attack1H01/03/05_R); a two-handed troll needs a ground clamp or left-hand IK;
-  - death clips sink the troll up to 0.42 m into the ground (the goblin 0.26 m): dead trolls as props would need the
-    `GoblinCorpses` lift;
+  - death clips sink the troll up to 0.42 m into the ground (the goblin 0.26 m); the set's two deaths are grounded
+    copies now (2026-10-23), the four others still sink 0.28–0.42 m; dead trolls as baked props would still need the
+    `GoblinCorpses` treatment (or a grounded clip);
   - the hair reads as a flat cap from the front; the eyes are small and the lids subtle; the face shows facets up
-    close (5,336-triangle body); 12 black texels left in the skin bake;
-  - no troll clips of its own (roar, club drag), no LODs.
+    close (5,336-triangle body); 12 black texels left in the skin bake; no LODs;
+  - Roar and ClubDrag (2026-10-23): installed in unity_verify only, not in MedievalSetting, not seen by Daniel. The
+    Roar keys the jaw 30° open but **TrollBody has no jaw weights** (no mouth interior): the open mouth needs a mouth
+    (a cut along the painted grin, an inside, Jaw weights, the lower fangs repainted onto the lower lip, and Unity's
+    Jaw muscle range, ±10° by default, widened for Troll.fbx); the grounded deaths leave the legs' undersides 5–6 cm
+    up and CombatDeath02's club 3 cm into the ground.
 
 - **Still to build:** bard, grenadier (medieval firepots or bombs, with a throw clip from `gob_anim`); a mounted
   archer (warg riders have spear and sword only).
@@ -170,4 +204,10 @@ Done:
     `uv_missing {}`, `tris_total` ~7,400; look at `renders/troll_*` (face, hands, UV layouts, `troll_game_22m_x4`,
     the `troll_pose_*_close` joints) at full size;
   - Unity: `Logs/TrollSetup/setup_report.txt` should show `avatar valid=True human=True bones=49 jaw=Jaw`, every clip
-    `human=True`, and per-clip numbers like README > Troll's table; look at `troll_lineup*.png` and `troll_clip_*.png`.
+    `human=True`, and per-clip numbers like README > Troll's table; look at `troll_lineup*.png` and `troll_clip_*.png`;
+  - the troll's own clips: `tools/troll_run.py -- anims` prints per clip the wrists' ranges (inside `COMFORT`), the
+    club's lowest point (ClubDrag: 0.009 every frame), `club_leg_clear` and `hands_leg_clear` (> 0); in Unity the
+    report's `own clips:` line (Roar event at 1.00 s, ClubDrag loop + root motion), the `ClubDrag per frame` line
+    (club never under 0, root motion ~1.5 m forward and ~0 sideways per loop) and the `grounded death` before/after
+    lines (end pose lowest ≥ −0.01 m); look at `renders/anim/troll_*.png` and Unity's `troll_clip_roar/clubdrag.png`,
+    `troll_death_*_ground_line.png` (nothing under the red line), `troll_new_clips_game_22m_x2.png`.

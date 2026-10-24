@@ -36,6 +36,7 @@ gob_anim.clear()           # back to the T-pose before exporting the character a
 | `gob_anim.py` | Custom clips keyframed through the rig's IK and baked on export (the archer's and the shaman's) |
 | `gob_crossbow.py` | Crossbow clips for the game's humans (scene **Goblin_Crossbow**), posed from the weapon kit's crossbow |
 | `troll_body.py`, `troll_paint.py`, `troll_gear.py`, `troll_build.py` | The troll, grown from the goblin's builders (see **Troll** below; `blender/troll.blend`, run by `tools/troll_run.py`) |
+| `troll_anim.py` | The troll's own clips (Roar, ClubDrag), posed through its IK with the hands placed by comfort |
 
 ## Budget (colony camera, ~40 m at 50°, no LODs)
 
@@ -364,8 +365,8 @@ parameters for this (`gob_body.build_body(warp=..., names=...)`, `gob_rig.build_
 defaults build the goblin as before.
 
 **Unity:** `tools\install_to_unity.ps1 -Project <project> -Troll` copies the scripts and the troll
-(`Assets/Goblins/Troll/Models/Troll.fbx`, `Models/Props/Prop_Troll*.fbx`, `Textures/T_Troll_*.png`; a plain install copies
-it too). **Tools > Goblins > Rebuild Troll** (`TrollSetup.cs`; it runs by itself once) makes the materials (skin plus
+(`Assets/Goblins/Troll/Models/Troll.fbx`, `Models/Props/Prop_Troll*.fbx`, `Models/Anims/Troll@*.fbx` + `troll_clips.json`,
+`Textures/T_Troll_*.png`; a plain install copies it too). **Tools > Goblins > Rebuild Troll** (`TrollSetup.cs`; it runs by itself once) makes the materials (skin plus
 Moss, Dark and Stone tints), the prop prefabs and `Assets/Goblins/Troll/Prefabs/Troll.prefab`: Humanoid Animator,
 `GoblinAppearance` (`bodyName` TrollBody, club always, hair 2:1, Skinny / Brawny / Fat, ear shapes, 0.95–1.06×,
 merged into one mesh), `GoblinPosture` and `GoblinTwoHandGrip`. Then, in a preview scene (no open scene is touched), it
@@ -391,8 +392,86 @@ club is best on one-handed swings, and the two-handed clips want a shorter reach
 Rebuild Troll, 2026-10-23): picked from the report's numbers so the club never goes into the ground. Idle = Idle01,
 Walk = Walk01_Forward, Run = Run01_Forward; **Swing** = Attack1H01_R, Attack1H03_R, Attack1H05_R (club tip -0.03 /
 +0.24 / +0.24 m, a fist brushes a leg in 1/30 frames in 03 and 05; left out: 1H02, a fist through a leg in 2/30
-frames, and 1H04, the tip -0.11 m); Hurt = CombatDamage01, 02; Death = Death02, CombatDeath02 (the shallowest
-sinks; held 1.5 s). No two-handed clips (the chop puts the club 0.41 m into the ground). The report checks each of these clips (Swing1H_2..5, Punch, Hit2, Death2..6 rows).
+frames, and 1H04, the tip -0.11 m); **Roar** = the troll's Roar (a threat pool, as the goblin chief's; `upright`);
+**ClubDrag** = the troll's ClubDrag (its own pool, `moves`, `upright`, held 4-8 s: a slower walk than Walk01, so not a
+Walk variant); Hurt = CombatDamage01, 02; **Death** = Death02_Grounded, CombatDeath02_Grounded (grounded copies of the
+two shallowest sinks, below; held 1.5 s). No two-handed clips (the chop puts the club 0.41 m into the ground). The
+report checks each of these clips (Swing1H_2..5, Punch, Hit2, Death2..6, Roar, ClubDrag, Death6G and Death2G rows).
+
+### The troll's own clips and grounded deaths (2026-10-23)
+
+Daniel, on the list of the troll's rough edges: "Do the number 4": the troll had no clips of its own, and dead trolls
+sank into the ground.
+
+![Unity, game camera (22 m, 50°, fov 30), 2x crop: a goblin, Roar at its peak, ClubDrag, a grounded death, Idle01](docs/images/troll_new_clips.png)
+
+`src/troll_anim.py` keys two clips on TrollRig the way `gob_anim` keys the goblin's (through the rig's IK from
+targets, every frame keyed, the skeleton exported to `export/Troll/Anims/Troll@<clip>.fbx` with `troll_clips.json`):
+
+| Clip | Length | What happens |
+|---|---|---|
+| `Roar` | 2.8 s, once | feet planted; gathers (crouch, chest down, head low, the club drawn in), rises and roars: chest up, shoulders back, the head thrust forward and up, the jaw keyed 30° open, the free (left) arm out with the hand clawed, the club raised high on the right (fist over head height, club up and a little back); holds it with a tremor, settles back to an idle stance. Event **Roar** at 1.0 s (the peak) |
+| `ClubDrag` | 2.0 s, loop | a slow, stooped, menacing walk: 1.5 m strides, root motion straight forward (Unity: 1.52 m per loop, 0.76 m/s, 0.000 m sideways at the loop's end); the club trails on the ground behind the troll's right side, about 60° out from straight back |
+
+The hands are placed by comfort, not by aiming the club and letting the wrist take what is left (wrists bent 40-70°
+were rejected before): `_arm` puts the wrist where it should be, swivels the elbow, then turns the hand from its
+forearm by a forearm twist, a wrist flexion and a deviation, all inside `COMFORT` (flex 25°, ulnar 30°, radial 15°,
+forearm twist 80° (Unity's twist muscle stops at 90), upper-arm twist 60°). Where the club must touch the ground the
+deviation is solved for it. The club's business end leaves the thumb side of the fist, so a club that trails behind
+needs the palm turned forward and the upper arm turned: `optimise_drag` (Nelder-Mead over the wrist's place, the
+elbow, the twist and the flexion, the whole cycle checked) found the grip in `DRAG`; a club trailing straighter back
+(heading 50° or less) asked for a 31° deviation and a 63° upper-arm twist, so it trails at ~60°. The troll stoops
+low and bows toward the club (`GAIT` side / club_shoulder): from a higher fist the 1.15 m club reaches the ground
+only with the wrist bent past 30°. `optimise_roar_club` found the raised club (`ROAR_CLUB`).
+
+Measured (Blender, `renders/anim/troll_clips_report.json`, every frame; Unity rows from `Logs/TrollSetup`):
+
+| | Roar | ClubDrag |
+|---|---|---|
+| right wrist: flex / deviation / forearm twist / upper-arm twist | 5–11° / 9–18° / 4–77° / ≤49° | 17° / −4–13° / 78–80° / 52–59° |
+| left wrist | 8–15° / 0–5° / −10–15° / ≤51° | 10° / 3° / −15° / ≤22° |
+| club's lowest point | 0.51 m and up (Unity 0.52 m) | 9 mm above the ground in every frame (Unity, per frame: +3 to +15 mm, never under) |
+| club / fists clear of the legs | 0.05 m / palms 0.04 m (Unity: palms 0.03 m, 0/30 frames into a leg) | 0.10 m / palms 0.03 m (Unity 0.03 m, 0/30) |
+| body's lowest point | −1 mm (planted feet) | −13 mm (heel strike; Unity −10 mm, as Walk01's −41 mm) |
+
+`TrollBody` has no jaw weights (no mouth interior, like the goblin's), so the keyed jaw does not show yet.
+
+**Unity:** `TrollSetup.ConfigureClips` imports `Models/Anims/Troll@*.fbx` Humanoid on Troll.fbx's avatar with the
+loop, root motion and events of `troll_clips.json`; the Roar event calls `GoblinEvents.OnGoblinEvent("Roar")`
+(`Runtime/GoblinEvents.cs`, on the Troll prefab; a game's clip player can also read the event's time, its
+stringParameter is "Roar"). The pools are marked `upright`: the clips carry the troll's posture and GoblinPosture's
+hunch stays out.
+
+**Grounded deaths.** The set's two deaths sank the troll's body into the ground (the human's fall on longer limbs and
+bigger ears): the setup now makes grounded copies, `Animation/Death02_Grounded.anim` and
+`CombatDeath02_Grounded.anim`. `GroundDeath` samples the source on the troll (foot IK on, GoblinPosture as a game plays
+deaths) at 60 Hz, lays the end pose on its support plane (the plane under the body that is highest under its centre:
+where a lying body rolls to, tilted at most 8°), brings that tilt and lift in as the hips fall and lifts any frame that
+still goes under on the way down. It is a rigid move of the whole body written into the clip's body curves (RootT,
+RootQ); the muscle and IK goal curves are copied as they are (moving the goals too put the feet 3 cm under).
+
+![Death02 at its end from ground level, the ground hidden, its line red: left the clip as bought, right grounded](docs/images/troll_death_grounded.png)
+
+| End pose (m, + above the ground) | lowest | torso | head | ears | arms | hands | legs | feet | club |
+|---|---|---|---|---|---|---|---|---|---|
+| Death02 as bought | −0.066 | −0.07 | +0.02 | −0.07 | −0.04 | −0.01 | +0.00 | −0.04 | −0.06 |
+| Death02_Grounded (tilted 2.6°, lifted 0.055) | +0.000 | +0.00 | +0.10 | +0.03 | +0.01 | +0.01 | +0.05 | +0.00 | +0.06 |
+| CombatDeath02 as bought | −0.068 | −0.05 | −0.03 | −0.07 | −0.03 | −0.02 | +0.01 | −0.03 | −0.12 |
+| CombatDeath02_Grounded (tilted 1.3°, lifted 0.050) | −0.001 | +0.00 | +0.02 | +0.00 | +0.02 | +0.02 | +0.06 | +0.00 | −0.03 |
+
+Over the whole clip (30 samples) the lowest point went from −0.073 to −0.011 m (Death02) and from −0.145 to −0.017 m
+(CombatDeath02). Lying, the back, the heels and the hands are on the ground; what stays up is the pose's own: the
+undersides of the legs (5–6 cm, from the hips down to the heels) and Death02's head, which the bought pose holds 9 cm
+above the back (10 cm up; its ears 3 cm).
+The club, a prop, still dips 3 cm in CombatDeath02.
+
+Rebuild: `blender.exe -b blender/troll.blend --python tools/troll_run.py -- anims anim_review` (keys both clips,
+writes the report, exports `export/Troll/Anims/`, renders `renders/anim/troll_*`: strips, the roaring face, the
+dragging fist, the club on the ground, the game camera), or in Blender `import troll_anim as TA; TA.build_all();
+TA.report(); TA.export_clips()`; `TA.use("Roar")` puts a clip on the rig (scene **Troll_Anim**: the troll on a
+checkered ground), `TA.clear()` before exporting the character again. In Unity, Rebuild Troll writes the clips' and
+deaths' rows, `troll_clip_roar/clubdrag/death6g/death2g.png`, `troll_death_*_before_after.png`,
+`troll_death_*_ground_line.png` and `troll_new_clips_game_22m(_x2).png`.
 
 ## Repository
 
@@ -400,12 +479,12 @@ sinks; held 1.5 s). No two-handed clips (the chop puts the club 0.41 m into the 
 |---|---|
 | `src/` | the Blender Python that builds everything |
 | `blender/goblins.blend` | the working file (16 MB) |
-| `blender/troll.blend` | the troll's file (19 MB), built by `tools/troll_run.py` |
-| `export/` | Unity-ready FBX: `Goblin.fbx`, `Props/`, `Anims/`; `Troll/Troll.fbx`, `Troll/Props/` |
+| `blender/troll.blend` | the troll's file (21 MB), built by `tools/troll_run.py`; its clips in actions Roar and ClubDrag |
+| `export/` | Unity-ready FBX: `Goblin.fbx`, `Props/`, `Anims/`; `Troll/Troll.fbx`, `Troll/Props/`, `Troll/Anims/` |
 | `textures/` | baked skins and gear atlas |
 | `unity/Goblins/` | the Unity scripts (`Runtime/`, `Editor/`); `unity/Verify/` is the batch-mode export check |
 | `tools/install_to_unity.ps1` | copies all of it into a Unity project (`-Troll`: the scripts and the troll only) |
-| `tools/troll_run.py` | headless driver for the troll (build, review, export) |
+| `tools/troll_run.py` | headless driver for the troll (build, review, export, anims, anim_review) |
 | `docs/images/` | the pictures in this README |
 | `HANDOFF.md` | conventions, open issues and checks for whoever picks this up next |
 
